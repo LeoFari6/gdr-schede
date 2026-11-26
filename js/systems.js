@@ -61,8 +61,8 @@ export const GENERIC = {
     {
       id: 'stato', title: 'Stato', columns: 3,
       fields: [
-        { key: 'pf_max', label: 'Punti vita massimi', type: 'number', default: 10 },
-        { key: 'pf', label: 'Punti vita', type: 'resource', max: '@pf_max' },
+        { key: 'pf', label: 'Punti vita', type: 'resource', max: '@pf_max', editableMax: true, emphasis: 'primary', span: 2 },
+        { key: 'pf_max', label: 'Punti vita massimi', type: 'number', default: 10, hidden: true },
         { key: 'fato', label: 'Punti fato', type: 'dots', max: 5, default: 3 },
       ],
     },
@@ -114,7 +114,7 @@ function hitDiceFields(n) {
   return [
     { key: `tipo_dv${sfx}`, label: 'Dado vita', type: 'computed', hidden: true, formula: die },
     // rimasti / totale (= livello della classe); il riposo lungo li recupera tutti
-    { key: `dv${sfx}`, label: `Dadi vita${name} ({@tipo_dv${sfx}})`, type: 'resource', max: `@${lvl}`, span: 2, showIf: n === 1 ? undefined : '@multiclasse' },
+    { key: `dv${sfx}`, label: `Dadi vita${name} ({@tipo_dv${sfx}})`, type: 'resource', max: `@${lvl}`, emphasis: 'compact', showIf: n === 1 ? undefined : '@multiclasse' },
     { key: `dado_hb${sfx}`, label: `Dado vita${name}`, type: 'select', options: ['d6', 'd8', 'd10', 'd12'], default: 'd8', showIf: `${multi}@${cls} != "" && !(${known})` },
   ];
 }
@@ -209,7 +209,7 @@ function spellcasting(n) {
         // divisi per livello (trucchetti, 1°…9°), ogni riga su una linea che scorre di lato
         key: `incantesimi${sfx}`, label: '', type: 'list',
         groupBy: 'liv', groups: caster.groups, scroll: true,
-        itemLabel: ['conosciuto', 'conosciuti'], countCheck: { key: 'prep', label: 'preparati' }, addLabel: 'Aggiungi',
+        itemLabel: ['conosciuto', 'conosciuti'], countCheck: { key: 'prep', label: 'preparati' }, countExclude: { key: 'sempre', label: 'sempre' }, addLabel: 'Aggiungi',
         emptyText: 'Nessun incantesimo a questo livello: i livelli compaiono man mano che si sbloccano.',
         columns: [
           {
@@ -229,6 +229,8 @@ function spellcasting(n) {
           { key: 'componenti', label: 'Componenti', type: 'text', width: 2 },
           { key: 'durata', label: 'Durata', type: 'text', width: 2 },
           { key: 'prep', label: 'Prep.', type: 'checkbox' },
+          // sempre conosciuti/preparati (es. incantesimi di dominio o di sottoclasse): non contano nei totali
+          { key: 'sempre', label: 'Sempre', type: 'checkbox', title: 'Sempre conosciuto/preparato (es. da sottoclasse): non conta nei totali' },
         ],
       },
     ],
@@ -290,15 +292,18 @@ export const DND5E = {
       ],
     },
     {
-      id: 'pf', title: 'Punti ferita', tab: 'Principale', columns: 4,
+      id: 'pf', title: 'Punti ferita', tab: 'Principale', columns: 3,
       fields: [
-        { key: 'pf', label: 'Punti ferita attuali', type: 'resource', max: '@pf_max', span: 2 },
-        { key: 'pf_max', label: 'PF massimi', type: 'number', default: 10 },
+        // il massimo si cambia direttamente nel contatore (il campo pf_max resta per le formule)
+        { key: 'pf', label: 'Punti ferita', type: 'resource', max: '@pf_max', editableMax: true, span: 2, emphasis: 'primary' },
+        { key: 'pf_max', label: 'PF massimi', type: 'number', default: 10, hidden: true },
         { key: 'pf_temp', label: 'PF temporanei', type: 'number' },
         ...hitDiceFields(1),
         ...hitDiceFields(2),
-        { key: 'morte_ok', label: 'Tiri contro morte: successi', type: 'dots', max: 3 },
-        { key: 'morte_ko', label: 'Tiri contro morte: fallimenti', type: 'dots', max: 3 },
+        // un solo contatore a pallini per successi e fallimenti (i valori restano in morte_ok / morte_ko)
+        { key: 'tiri_morte', label: 'Tiri contro morte', type: 'deathsaves', success: 'morte_ok', fail: 'morte_ko', span: 2 },
+        { key: 'morte_ok', label: 'Tiri contro morte: successi', type: 'dots', max: 3, hidden: true },
+        { key: 'morte_ko', label: 'Tiri contro morte: fallimenti', type: 'dots', max: 3, hidden: true },
       ],
     },
     {

@@ -8,6 +8,49 @@ import { openSpellList } from './spell-list.js';
 // Tab aperta per ogni personaggio, per ritrovarla dopo un ridisegno.
 const lastTab = new Map();
 
+// ---- stampa / PDF ------------------------------------------------------------
+// Al momento di stampare si costruisce una versione apposta per la carta: tutte le
+// tab in fila, tutto aperto, senza pulsanti né sezioni vuote. Vale anche per Cmd+P.
+let printTarget = null; // { sys, id } del personaggio aperto
+
+// Costruisce la versione da stampare di un personaggio (usata da buildPrint).
+export function makePrintRoot({ sys, name, values, options = {} }) {
+  const sheet = renderSheet({ system: sys, values: structuredClone(values), options: { ...options, print: true } });
+  const root = h('div', { id: 'print-root', class: sys.theme === 'fantasy' ? 'fantasy' : '' },
+    h('header', { class: 'print-head' }, h('h1', {}, name), h('p', {}, sys.name)),
+    sheet.el);
+  root.querySelectorAll('.rt-editor, .list-tools').forEach((e) => e.remove()); // parti solo per modificare
+  // su carta i campi diventano testo semplice, che va a capo invece di essere tagliato
+  root.querySelectorAll('input:not([type=checkbox]), select').forEach((el) => {
+    const text = el.tagName === 'SELECT' ? (el.value ? el.options[el.selectedIndex]?.text ?? '' : '') : el.value;
+    el.replaceWith(h('span', { class: `${el.className} print-value` }, text));
+  });
+  root.querySelectorAll('.feats-empty, .rt-empty').forEach((e) => e.remove());
+  // testi vuoti (es. Ideali non compilati): via anche l'etichetta
+  root.querySelectorAll('.f-richtext').forEach((f) => { if (!f.querySelector('.rt-view p, .rt-view li')) f.remove(); });
+  // via le sezioni (e le tab) rimaste senza contenuto
+  const filled = 'input, select, textarea, .val, .feat, .lgroup, .dot, .stat-box, .skill-row, .rt-view p, .rt-view li, .counters, img';
+  root.querySelectorAll('.sec').forEach((s) => { if (!s.querySelector('.f') || !s.querySelector(filled)) s.remove(); });
+  root.querySelectorAll('.sheet-page').forEach((p) => { if (!p.querySelector('.sec')) p.remove(); });
+  // titolo di sezione uguale a quello della tab (es. Incantesimi / Incantesimi): ne basta uno
+  root.querySelectorAll('.sheet-page').forEach((p) => {
+    const tab = p.querySelector('.print-tab')?.textContent;
+    p.querySelectorAll('.sec-head h2').forEach((h2) => { if (h2.textContent === tab) h2.closest('.sec-head').remove(); });
+  });
+  return root;
+}
+
+function buildPrint() {
+  removePrint();
+  if (!printTarget || !location.hash.startsWith(`#/c/${encodeURIComponent(printTarget.id)}`)) return;
+  const c = store.character(printTarget.id);
+  if (!c) return;
+  document.body.append(makePrintRoot({ sys: printTarget.sys, name: c.name, values: c.values, options: c.options || {} }));
+}
+function removePrint() { document.getElementById('print-root')?.remove(); }
+addEventListener('beforeprint', buildPrint);
+addEventListener('afterprint', removePrint);
+
 export function renderCharacter(root, id) {
   const c = store.character(id);
   if (!c) {
@@ -29,6 +72,7 @@ export function renderCharacter(root, id) {
   });
   document.title = `${c.name} · Schede GdR`;
 
+  printTarget = { sys, id: c.id };
   const sheet = renderSheet({
     system: sys,
     values: c.values,
@@ -95,7 +139,7 @@ export function renderCharacter(root, id) {
         ...menuToggles,
         hasWeight(sys) ? { label: weightOn ? 'Disattiva peso e ingombro' : 'Attiva peso e ingombro', icon: 'weight', onClick: toggleWeight } : null,
         { label: 'Esporta (.json)', icon: 'download', onClick: () => { download(`${slugify(c.name)}.json`, store.exportCharacter(c.id)); toast('Scheda esportata'); } },
-        { label: 'Stampa / PDF', icon: 'print', onClick: () => window.print() },
+        { label: 'Stampa / PDF', icon: 'print', onClick: () => { buildPrint(); window.print(); } },
         { label: 'Duplica', icon: 'copy', onClick: () => { const d = store.duplicateCharacter(c.id); location.hash = `#/c/${d.id}`; } },
         store.isBuiltin(sys.id) ? null : { label: 'Modifica modello', icon: 'edit', onClick: () => { location.hash = `#/t/${sys.id}`; } },
         { label: 'Elimina', icon: 'trash', danger: true, onClick: async () => {

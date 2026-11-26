@@ -82,7 +82,7 @@ Gli usi e i contatori dei privilegi si recuperano da soli in base alla loro rica
 | `stat` | Caratteristica con modificatore | `mod` (formula, `@this` = valore) | `@key`, `@key_mod` |
 | `computed` | Valore calcolato in sola lettura | `formula`, `signed` | `@key` |
 | `skill` | Abilità con livelli di competenza (pallini) | `formula` (`@this` = livello), `levels`, `signed` | `@key` = bonus, `@key_level` |
-| `resource` | Attuale / massimo con barra (PF, sanità…) | `max` (numero o formula) | `@key` = attuale, `@key_max` |
+| `resource` | Attuale / massimo con barra (PF, sanità…) | `max` (numero o formula), `emphasis`: `"primary"` (in evidenza) o `"compact"` (piccolo, senza barra), `editableMax: true` (se `max` è un campo numerico, es. `@pf_max`, lo si cambia nel contatore) | `@key` = attuale, `@key_max` |
 | `dots` | Pallini cliccabili | `max` (numero) | `@key` |
 | `checkbox` | Casella | `menu` (se `true` non compare nella griglia ma come voce del menu ⋯ della scheda; testi facoltativi `menuOff` / `menuOn`) | `@key` → 1 o 0 |
 | `select` | Scelta da elenco | `options` (array di testi) | `@key` → testo |
@@ -114,6 +114,7 @@ Opzioni della lista:
 | `itemLabel` | Nome delle righe nel conteggio, es. `["incantesimo", "incantesimi"]` |
 | `countCheck` | Conta anche le righe con una casella spuntata, es. `{ "key": "prep", "label": "preparati" }` |
 | `addLabel` | Testo del pulsante di aggiunta in ogni gruppo |
+| `countExclude` | Righe con questa casella spuntata non contano nei totali e si contano a parte, es. `{ "key": "sempre", "label": "sempre" }` |
 | `scroll` | `true`: ogni riga resta su una linea e la tabella scorre di lato, con la prima colonna fissa |
 
 Tipi di colonna: `text`, `number`, `checkbox`, `computed` (con `formula`, dove si usa

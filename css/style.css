@@ -371,11 +371,63 @@ input[type="checkbox"] { width: 1.1rem; height: 1.1rem; accent-color: var(--acce
 .bar[data-level="mid"] .bar-fill { background: var(--brass); }
 .bar[data-level="low"] .bar-fill { background: var(--ko); }
 
+/* punti ferita in evidenza */
+.res-primary > .stack { padding: .6rem .75rem .7rem; border-radius: 12px; background: var(--bg-2); gap: .4rem; }
+.res-primary .lbl { font-size: .8rem; font-weight: 600; color: var(--ink-2); }
+.res-primary .res { gap: .5rem; }
+.res-primary .res > .btn.sq:not(.small) { width: 2.6rem; height: 2.6rem; font-size: 1.25rem; background: var(--paper); }
+.res-primary .res-cur { width: 4.6rem; min-height: 2.6rem; font-size: 1.6rem; font-weight: 700; background: var(--paper); border-color: transparent; }
+.res-primary .res-max { font-size: 1.15rem; }
+.res-primary .bar { height: 7px; margin-top: .05rem; background: var(--paper); }
+/* massimo modificabile dentro il contatore ("/ 44") */
+.res-max-edit { display: inline-flex; align-items: center; gap: .2rem; }
+.res .res-cur, .res .res-max-input, .res > .btn { flex: none; } /* i numeri non si stringono */
+.res-max-input { width: 3.6rem; min-height: 2.2rem; padding: .2rem .3rem; text-align: center; font: inherit; color: var(--ink-2); background: transparent; border-color: transparent; }
+.res-max-input:hover { border-color: var(--line-2); background: var(--paper); }
+.res-max-input:focus { color: var(--ink); background: var(--paper); }
+
+/* dadi vita (e simili) più discreti */
+.res-compact .res { gap: .35rem; }
+.res-compact .res > .btn.sq:not(.small) { width: 2rem; height: 2rem; font-size: .95rem; }
+.res-compact .res-cur { width: 3.2rem; min-height: 2rem; font-size: 1rem; padding: .2rem; }
+.res-compact .res-max { font-size: .9rem; }
+.res-compact .bar { display: none; }
+
 /* pallini */
 .dots { display: flex; flex-wrap: wrap; gap: .3rem; min-height: 2rem; align-items: center; }
 .dot { width: 1.25rem; height: 1.25rem; border-radius: 50%; border: 1.5px solid var(--line-2); background: none; cursor: pointer; padding: 0; transition: background .15s, border-color .15s; }
+/* pallini di un campo (es. slot incantesimo): sempre su una riga; se lo spazio è poco si rimpiccioliscono */
+.f-dots { container-type: inline-size; }
+.f-dots .dots { flex-wrap: nowrap; gap: .3rem; }
+.f-dots .dot { flex: none; width: min(1.25rem, calc((100cqw - (var(--n, 5) - 1) * .3rem) / var(--n, 5))); height: auto; aspect-ratio: 1; }
 .dot:hover { border-color: var(--ink-3); }
 .dot.on { background: var(--accent); border-color: var(--accent); }
+
+/* tiri contro morte */
+.ds { display: grid; gap: .3rem; }
+.ds-row { display: flex; align-items: center; gap: .6rem; }
+.ds-lbl { width: 5.5rem; font-size: .82rem; color: var(--ink-2); }
+.dot.ds-ok.on { background: var(--ok); border-color: var(--ok); }
+.dot.ds-ko.on { background: var(--ko); border-color: var(--ko); }
+.ds-stable .ds-ok { animation: ds-pulse .45s ease 2; }
+@keyframes ds-pulse { 50% { transform: scale(1.3); box-shadow: 0 0 0 4px var(--ok-soft); } }
+
+/* schermata della morte */
+.death { position: fixed; inset: 0; z-index: 200; display: grid; place-items: center; padding: 1.5rem; background: radial-gradient(circle at 50% 42%, rgb(90 8 8 / .88), rgb(8 4 4 / .97) 70%); animation: death-fade .5s ease both; }
+.death.out { opacity: 0; transition: opacity .3s; }
+.death-inner { text-align: center; color: #f3ede4; }
+.death-skull { width: 9rem; height: 9rem; color: #f3ede4; filter: drop-shadow(0 0 28px rgb(255 70 60 / .55)); animation: skull-in .9s cubic-bezier(.2, .9, .3, 1.35) both, skull-shake .45s .95s ease-in-out 2; }
+.death-hole { fill: #2a0606; }
+.death-teeth { stroke: #2a0606; stroke-width: 2.4; stroke-linecap: round; }
+.death h2 { margin: 1rem 0 .3rem; font: 600 2.6rem/1 "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif; letter-spacing: .25em; text-transform: uppercase; animation: death-text .8s .55s both; }
+.death p { margin: 0 0 1.4rem; color: rgb(243 237 228 / .7); animation: death-text .8s .75s both; }
+.death-actions { display: flex; gap: .5rem; justify-content: center; animation: death-text .6s 1s both; }
+.death .btn { background: rgb(255 255 255 / .1); border-color: rgb(255 255 255 / .25); color: #fff; }
+.death .btn:hover { background: rgb(255 255 255 / .2); }
+@keyframes death-fade { from { opacity: 0; } }
+@keyframes skull-in { from { opacity: 0; transform: translateY(-40px) scale(.3) rotate(-25deg); } }
+@keyframes skull-shake { 25% { transform: rotate(-7deg); } 75% { transform: rotate(7deg); } }
+@keyframes death-text { from { opacity: 0; letter-spacing: .6em; } }
 
 /* immagine */
 .img-box { position: relative; aspect-ratio: 1; max-width: 11rem; border-radius: var(--radius); overflow: hidden; display: grid; place-items: center; background: var(--bg-2); }
@@ -449,12 +501,18 @@ table.list thead, table.list tbody { display: block; }
 table.list tr { display: grid; grid-template-columns: var(--cols); gap: .4rem; align-items: center; padding: .25rem 0; }
 table.list tbody tr { border-top: 1px solid var(--line); }
 table.list th { text-align: left; font-size: .74rem; font-weight: 500; color: var(--ink-3); padding: 0 .15rem .2rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-table.list th.th-icon { text-align: center; }
+table.list th.th-icon, table.list th.th-check { text-align: center; }
+table.list th.th-check { overflow: visible; text-overflow: clip; padding: 0; }
 table.list th.th-icon .icon { width: .95rem; height: .95rem; }
 table.list td { min-width: 0; }
 table.list .input { min-height: 2.15rem; padding: .3rem .5rem; border-color: transparent; background: transparent; }
 table.list .input:hover { background: var(--bg-2); }
 table.list .input:focus { background: var(--paper); border-color: var(--line-2); }
+/* righe speciali (es. incantesimi sempre preparati) */
+table.list tr.row-flag { background: color-mix(in srgb, var(--accent-soft) 70%, transparent); }
+table.list tr.row-flag td:first-child .input { font-weight: 600; }
+table.list-scroll tr.row-flag td:first-child { background: color-mix(in srgb, var(--accent-soft) 70%, var(--paper)); }
+#print-root table.list tr.row-flag, #print-root table.list-scroll tr.row-flag td:first-child { background: none; }
 .cell-checkbox { display: flex; justify-content: center; }
 .cell-computed { text-align: center; }
 .add-row { margin-top: .5rem; align-self: flex-start; }
@@ -597,7 +655,7 @@ dialog.modal h2 { font-size: 1.1rem; margin-bottom: .9rem; }
 .json-area { min-height: 60vh; font-size: .85rem; line-height: 1.45; white-space: pre; margin: .6rem 0; }
 
 /* ---- telefono ------------------------------------------------------------- */
-@media (max-width: 760px) {
+@media screen and (max-width: 760px) {
   :root { --topbar-h: 3.25rem; }
   body { font-size: 15px; }
   /* 16px nei campi: su iPhone evita lo zoom automatico (e lo spostamento della pagina) quando li tocchi */
@@ -616,8 +674,11 @@ dialog.modal h2 { font-size: 1.1rem; margin-bottom: .9rem; }
   .f { grid-column: span 1 !important; grid-row: auto !important; }
   .f.wide:not(.tile), .f-text:not(.tile), .f-select:not(.tile), .f-resource, .f-select.tile { grid-column: 1 / -1 !important; }
   .grid[data-cols="3"] .f-skill, .grid[data-cols="4"] .f-skill { grid-column: 1 / -1 !important; }
-  .grid[data-cols="9"] .dot { width: 1.1rem; height: 1.1rem; }
   .f.tile, .stat-box { min-height: 5.2rem; padding: .6rem .35rem; }
+  .res-primary .res { gap: .35rem; }
+  .res-primary .res-cur { width: 3.9rem; }
+  .res-max-input { width: 3.1rem; }
+  .res-primary .res > .btn.sq:not(.small) { width: 2.5rem; height: 2.5rem; }
   .f.tile .input, .f.tile .val { font-size: 1.3rem; }
   .stat-mod { font-size: 1.5rem; }
   .img-box { max-width: 7.5rem; }
@@ -686,16 +747,114 @@ dialog.modal h2 { font-size: 1.1rem; margin-bottom: .9rem; }
   .ed-col-main { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
 }
 
-/* ---- stampa --------------------------------------------------------------- */
+/* ---- stampa / PDF -----------------------------------------------------------
+   La versione da stampare (#print-root) viene costruita solo al momento della
+   stampa: tutte le tab in fila, tutto aperto, senza pulsanti né parti vuote. */
+#print-root { display: none; }
 @media print {
-  :root, [data-theme] { --bg: #fff; --paper: #fff; --bg-2: #f2f2f2; --ink: #000; --ink-2: #333; --ink-3: #666; --line: #ccc; --line-2: #aaa; --shadow: none; }
-  .topbar, #toasts, .note-btn, .add-row, .feat-edit, .feat-add-child, .uses-btn, .rt-actions, .cell-actions, .img-actions, .res .btn, .tabs { display: none !important; }
-  .sheet-page[hidden] { display: block !important; }
-  .sheet-main { padding: 0; max-width: none; }
-  .sec { break-inside: avoid; margin-bottom: .5rem; }
-  .sec.collapsed .grid { display: grid; }
-  body { font-size: 12px; }
+  @page { size: A4; margin: 12mm 12mm 14mm; }
+  html, body { background: #fff !important; }
+  body > :not(#print-root) { display: none !important; }
+  #print-root { display: block; }
 }
+#print-root {
+  --bg: #fff; --paper: #fff; --bg-2: #f3f3f3; --ink: #111; --ink-2: #333; --ink-3: #6b6b6b;
+  --line: #d4d4d4; --line-2: #bdbdbd; --shadow: none;
+  color: var(--ink); background: #fff; font-size: 9.5pt; line-height: 1.4; color-scheme: light;
+  -webkit-print-color-adjust: exact; print-color-adjust: exact;
+}
+#print-root .print-head { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; padding-bottom: .35rem; margin-bottom: .6rem; border-bottom: 2px solid var(--ink); }
+#print-root .print-head h1 { font-size: 20pt; letter-spacing: -.01em; }
+#print-root .print-head p { margin: 0; font-size: 9pt; color: var(--ink-3); }
+#print-root.fantasy .print-head h1 { font-family: var(--font-display); }
+#print-root .print-tab { margin: 0 0 .45rem; padding-bottom: .2rem; border-bottom: 1px solid var(--line-2); font-size: 12pt; }
+#print-root .sheet-page + .sheet-page { break-before: page; }
+#print-root .sheet-page[hidden] { display: block !important; }
+
+/* sezioni: niente scatole, solo un titolo e un filo sotto */
+#print-root .sec { background: none; border: 0; border-radius: 0; margin: 0 0 .5rem; break-inside: avoid; }
+#print-root .sec:has(.feats, .lgroups) { break-inside: auto; }
+#print-root .sec[hidden], #print-root .f[hidden] { display: none !important; }
+#print-root .sec-head { padding: 0 0 .15rem; border-bottom: 1px solid var(--line); cursor: default; }
+#print-root .sec-head h2 { font-size: 10.5pt; }
+#print-root.fantasy .sec-head h2 { font-size: 11pt; }
+#print-root .grid { padding: .35rem 0 0; gap: .35rem .7rem; }
+#print-root .sec.collapsed .grid { display: grid; }
+#print-root .lbl { font-size: 7.5pt; color: var(--ink-3); }
+
+/* valori come in un modulo di carta: un filo sotto, niente riquadri */
+#print-root .input, #print-root .val, #print-root select.input {
+  min-height: 0; padding: .1rem .15rem; border: 0; border-bottom: 1px solid var(--line); border-radius: 0;
+  background: none; box-shadow: none; font-size: 9.5pt; color: var(--ink);
+}
+#print-root select.input { background-image: none; padding-right: .15rem; }
+#print-root .val { font-weight: 600; }
+#print-root .print-value { display: block; min-height: 1.35em; white-space: pre-wrap; overflow-wrap: anywhere; }
+#print-root .f.tile .print-value, #print-root .stat-box .print-value { text-align: center; }
+#print-root .res .print-value { display: inline-block; min-width: 1.5rem; text-align: right; }
+#print-root .toggle { min-height: 0; padding: .1rem 0; border: 0; background: none; }
+#print-root .toggle-box { width: .95rem; height: .95rem; }
+
+/* tessere e caratteristiche */
+#print-root .f.tile, #print-root .stat-box { min-height: 0; padding: .3rem .25rem; border: 1px solid var(--line); border-radius: 6px; background: none; }
+#print-root .f.tile > .stack, #print-root .f.tile > label.stack { gap: .05rem; }
+#print-root .f.tile .input, #print-root .f.tile .val { border: 0; font-size: 13pt; min-height: 0; padding: 0; }
+#print-root .stat-mod { font-size: 15pt; }
+#print-root .stat-score { width: auto; min-height: 0; padding: 0; border: 0; font-size: 8.5pt; background: none; }
+#print-root .f.tile .sub:empty { display: none; }
+
+/* abilità, pallini, risorse */
+#print-root .skill-row { min-height: 0; padding: .05rem 0; gap: .4rem; }
+#print-root .skill-name { font-size: 8.5pt; }
+#print-root .skill-stat { font-size: 6.5pt; }
+#print-root .pips { padding: .1rem; }
+#print-root input[type="checkbox"] { accent-color: #111; width: .85rem; height: .85rem; }
+#print-root .skill-val { width: 2.2rem; height: 1.35rem; font-size: 8.5pt; border: 1px solid var(--line); background: none; }
+#print-root .skill-row[data-level="2"] .skill-val { background: var(--ink); color: #fff; border-color: var(--ink); }
+#print-root .skill-row[data-level="1"] .skill-val { border-color: var(--ink); color: var(--ink); }
+#print-root .pip, #print-root .dot { border-color: var(--ink-3); }
+#print-root .pip.on, #print-root .dot.on, #print-root .ring-fill { background: var(--ink); border-color: var(--ink); stroke: var(--ink); }
+#print-root .dot, #print-root .f-dots .dot { width: .75rem; height: .75rem; }
+#print-root .dots { gap: .15rem; }
+#print-root .dots { min-height: 0; }
+#print-root .res-cur { width: 2.6rem; font-size: 10pt; border: 0; }
+#print-root .res-max { font-size: 10pt; }
+#print-root .bar { display: none; }
+#print-root .res-primary > .stack { padding: 0; background: none; }
+#print-root .res-primary .res-cur, #print-root .res-primary .res-max { font-size: 12pt; background: none; }
+#print-root .res-max-edit .print-value { display: inline-block; min-width: 1.5rem; }
+#print-root .img-box { max-width: 5.5rem; border-radius: 6px; }
+#print-root .img-box:not(:has(img)), #print-root .f-image:not(:has(img)) { display: none; }
+
+/* tabelle: stanno nella larghezza della pagina */
+#print-root .table-wrap { overflow: visible; }
+#print-root table.list tr { grid-template-columns: var(--cols-m) !important; min-width: 0 !important; gap: .25rem; padding: .05rem 0; break-inside: avoid; }
+#print-root table.list th { font-size: 7pt; }
+#print-root table.list .input { border: 0; padding: 0 .1rem; font-size: 8.5pt; }
+#print-root table.list-scroll td:first-child, #print-root table.list-scroll th:first-child { position: static; box-shadow: none; }
+#print-root .lgroup-head { min-height: 0; padding: .3rem 0 .1rem; font-size: 9.5pt; cursor: default; }
+#print-root .lgroup + .lgroup { border-top: 0; }
+#print-root .lgroup-body { padding-bottom: .2rem; }
+
+/* privilegi e note: si leggono per intero */
+#print-root .feat + .feat { border-top: 1px solid var(--line); }
+#print-root .feat { break-inside: avoid; }
+#print-root .feat-head, #print-root .feat-child-head { min-height: 0; }
+#print-root .feat-toggle { padding: .25rem 0 .1rem; font-size: 9.5pt; cursor: default; }
+#print-root .feat-body { padding: 0 0 .35rem; }
+#print-root .feat-child { border-left-color: var(--line-2); margin: .15rem 0; }
+#print-root .feat-child-body { padding-left: 0; }
+#print-root .feat-text, #print-root .counter-note { font-size: 8.5pt; color: var(--ink-2); }
+#print-root .counters { margin: .15rem 0 .35rem; }
+#print-root .counter-row > * { padding: .2rem .4rem; }
+#print-root .uses-num b { font-size: 9.5pt; }
+#print-root .ring { width: 1rem; height: 1rem; }
+#print-root .rt-view { min-height: 0; padding: 0; border: 0; font-size: 9pt; }
+
+/* tutto ciò che serve solo a modificare */
+#print-root :is(.note-btn, .add-row, .feat-edit, .feat-add-child, .uses-btn, .cell-actions, .img-actions, .res .btn,
+  .sec-gear, .combo-toggle, .list-tools, .rt-actions, .rt-editor, .uses-recharge,
+  .sec-head > .icon, .feat-toggle > .icon, .lgroup-head > .icon, .feat-count) { display: none !important; }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }

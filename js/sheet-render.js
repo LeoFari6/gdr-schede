@@ -1,7 +1,7 @@
 // Disegna una scheda a partire da un modello e dai valori di un personaggio.
 // Usato sia dalla vista "scheda" sia dall'anteprima dell'editor di modelli.
 import { h, icon, toast, pickFile, readImageResized, modal, confirmDialog, holdRepeat } from './ui.js';
-import { Engine, defaultValue, weightEnabled, normalizeFeature, normalizeCounter, counterMax, RECHARGE, MAX_USES } from './engine.js';
+import { Engine, allFields, defaultValue, weightEnabled, normalizeFeature, normalizeCounter, counterMax, RECHARGE, MAX_USES } from './engine.js';
 import { toNum, formatValue, interpolate } from './formula.js';
 import { richText, autoGrow, FORMAT_HINT } from './richtext.js';
 import { loadSpells, searchSpells } from './spells.js';
@@ -9,6 +9,7 @@ import { openSpellList } from './views/spell-list.js';
 
 // options.weight: mostra campi e colonne marcati "weight" (peso/ingombro).
 // options.menuFields: mostra nella griglia anche le caselle con "menu" (anteprima editor).
+// options.print: versione da stampare (tutte le tab in fila, tutto aperto, niente vuoti).
 export function renderSheet({ system, values, onChange, options = { weight: true }, initialTab, onTab }) {
   let engine = null;
   const getEngine = () => (engine ||= new Engine(system, values));
@@ -26,7 +27,7 @@ export function renderSheet({ system, values, onChange, options = { weight: true
 
   // ---- costruzione dei campi --------------------------------------------
   const showWeight = weightEnabled(options);
-  const ctx = { system, getEngine, set, values, updaters, showWeight, menuFields: !!options.menuFields };
+  const ctx = { system, getEngine, set, values, updaters, showWeight, menuFields: !!options.menuFields, print: !!options.print };
 
   const tabs = [];
   for (const s of system.sections || []) {
@@ -38,9 +39,10 @@ export function renderSheet({ system, values, onChange, options = { weight: true
 
   const root = h('div', { class: `sheet${system.theme === 'fantasy' ? ' fantasy' : ''}` });
   const pages = tabs.map((t) => h('div', { class: 'sheet-page', dataset: { tab: t.name } },
+    ctx.print && tabs.length > 1 ? h('h2', { class: 'print-tab' }, t.name) : null,
     t.sections.map((s) => renderSection(s, ctx))));
 
-  if (tabs.length > 1) {
+  if (tabs.length > 1 && !ctx.print) {
     const bar = h('nav', { class: 'tabs', role: 'tablist' });
     const select = (i) => {
       pages.forEach((p, j) => p.hidden = i !== j);
@@ -272,8 +274,19 @@ const FIELD_RENDERERS = {
   },
 
   resource(f, ctx, wrap) {
+    // emphasis: "primary" (es. punti ferita, in evidenza) o "compact" (es. dadi vita, più piccolo)
+    if (f.emphasis) wrap.classList.add(`res-${f.emphasis}`);
     const input = h('input', { type: 'number', inputmode: 'numeric', class: 'input res-cur', 'aria-label': `${f.label} attuali`, oninput: (e) => ctx.set(f.key, parseNum(e.target.value)) });
-    const max = h('span', { class: 'res-max' });
+    // editableMax: se il massimo è un altro campo numerico (es. "@pf_max"), si modifica direttamente qui
+    const maxRef = /^@([a-zA-Z_]\w*)$/.exec(String(f.max ?? '').trim())?.[1];
+    const maxField = f.editableMax && maxRef ? allFields(ctx.system).find((x) => x.key === maxRef && x.type === 'number') : null;
+    const maxInput = maxField ? h('input', {
+      type: 'number', inputmode: 'numeric', class: 'input res-max-input', 'aria-label': `${f.label}: massimo`, title: 'Massimo: tocca per cambiarlo',
+      oninput: (e) => ctx.set(maxField.key, parseNum(e.target.value)),
+    }) : null;
+    const max = h('span', { class: `res-max${maxInput ? ' res-max-edit' : ''}` });
+    const maxText = maxInput ? null : max;
+    if (maxInput) max.append('/', maxInput);
     const bar = h('div', { class: 'bar' }, h('div', { class: 'bar-fill' }));
     // un passo di +1/−1; si ferma a 0 e al massimo (restituisce false)
     const step = (d) => {
@@ -290,8 +303,10 @@ const FIELD_RENDERERS = {
       const cur = eng.safe(() => eng.value(f));
       const mx = eng.safe(() => eng.max(f));
       if (document.activeElement !== input) input.value = cur.ok ? cur.value : '';
-      max.textContent = mx.ok ? `/ ${formatValue(mx.value)}` : '/ ⚠';
-      max.title = mx.ok ? '' : mx.error;
+      if (maxText) {
+        maxText.textContent = mx.ok ? `/ ${formatValue(mx.value)}` : '/ ⚠';
+        maxText.title = mx.ok ? '' : mx.error;
+      } else if (document.activeElement !== maxInput) maxInput.value = mx.ok ? mx.value : '';
       const pct = mx.ok && mx.value > 0 && cur.ok ? Math.max(0, Math.min(100, (cur.value / mx.value) * 100)) : 0;
       bar.firstChild.style.width = `${pct}%`;
       bar.dataset.level = pct <= 25 ? 'low' : pct <= 50 ? 'mid' : 'ok';
@@ -305,6 +320,34 @@ const FIELD_RENDERERS = {
       bar));
   },
 
+  // Tiri contro morte: successi (verdi) e fallimenti (rossi). Con 3 successi il
+  // personaggio è stabile e i tiri si azzerano; con 3 fallimenti compare il teschio.
+  deathsaves(f, ctx, wrap) {
+    const okKey = f.success || 'morte_ok';
+    const koKey = f.fail || 'morte_ko';
+    const cur = (k) => Math.max(0, Math.min(3, toNum(ctx.values[k] ?? 0)));
+    const reset = () => { ctx.set(okKey, undefined); ctx.set(koKey, undefined); };
+    const tap = (key, i) => {
+      const next = cur(key) === i + 1 ? i : i + 1;
+      ctx.set(key, next || undefined);
+      if (next < 3 || ctx.print) return;
+      if (key === okKey) {
+        box.classList.add('ds-stable');
+        toast('Stabilizzato: i tiri contro morte si azzerano', 'ok', 3000);
+        setTimeout(() => { box.classList.remove('ds-stable'); reset(); }, 900);
+      } else deathScreen(reset);
+    };
+    const line = (key, cls, text) => {
+      const dots = [0, 1, 2].map((i) => h('button', { type: 'button', class: `dot ds-${cls}`, 'aria-label': `${text}: ${i + 1}`, onclick: () => tap(key, i) }));
+      return { key, dots, el: h('div', { class: 'ds-row' }, h('span', { class: 'ds-lbl' }, text), h('div', { class: 'dots' }, dots)) };
+    };
+    const ok = line(okKey, 'ok', 'Successi');
+    const ko = line(koKey, 'ko', 'Fallimenti');
+    const box = h('div', { class: 'ds' }, ok.el, ko.el);
+    ctx.updaters.push(() => { for (const r of [ok, ko]) { const c = cur(r.key); r.dots.forEach((d, i) => d.classList.toggle('on', i < c)); } });
+    wrap.append(h('div', { class: 'stack' }, label(f), box));
+  },
+
   dots(f, ctx, wrap) {
     // il numero di pallini può dipendere da altri campi (es. slot in base a classe e livello)
     const box = h('div', { class: 'dots', role: 'group', 'aria-label': f.label });
@@ -316,6 +359,7 @@ const FIELD_RENDERERS = {
       const max = Math.max(0, Math.min(30, r.ok ? r.value : 5));
       if (max !== shown) {
         shown = max;
+        box.style.setProperty('--n', String(Math.max(1, max))); // per rimpicciolire i pallini se non c'è spazio
         buttons = Array.from({ length: max }, (_, i) => h('button', {
           type: 'button', class: 'dot', 'aria-label': `${i + 1}`,
           onclick: () => { const cur = Math.min(toNum(raw(f, ctx)), shown); ctx.set(f.key, cur === i + 1 ? i : i + 1); },
@@ -368,7 +412,11 @@ const FIELD_RENDERERS = {
     // variant "journal": voci semplici (titolo + testo), le nuove in cima con la data
     const journal = f.variant === 'journal';
     const box = h('div', { class: `feats${journal ? ' journal' : ''}` });
-    const items = () => (Array.isArray(raw(f, ctx)) ? raw(f, ctx) : []).map((r) => normalizeFeature(r));
+    const items = () => (Array.isArray(raw(f, ctx)) ? raw(f, ctx) : []).map((r) => {
+      const n = normalizeFeature(r);
+      if (ctx.print) { n.aperto = true; n.figli.forEach((c) => { c.aperto = true; }); } // in stampa si legge tutto
+      return n;
+    });
     const commit = (next) => { ctx.set(f.key, next); draw(); };
     // path = [i] per un privilegio, [i, j] per un sotto-privilegio
     const change = (path, fn) => {
@@ -467,7 +515,8 @@ const FIELD_RENDERERS = {
   //     (anche su telefono), con la prima colonna sempre visibile.
   list(f, ctx, wrap) {
     const groupCol = f.groupBy ? (f.columns || []).find((c) => c.key === f.groupBy) : null;
-    const cols = (f.columns || []).filter((c) => (!c.weight || ctx.showWeight) && c !== groupCol);
+    // in stampa le colonne "note" (finestre a comparsa) non servono
+    const cols = (f.columns || []).filter((c) => (!c.weight || ctx.showWeight) && c !== groupCol && !(ctx.print && c.type === 'notes'));
     const scroll = !!f.scroll;
     const rows = () => {
       const v = raw(f, ctx);
@@ -477,12 +526,14 @@ const FIELD_RENDERERS = {
     // Larghezze minime delle colonne (rem): una serie per desktop e una più
     // stretta per telefono, così il nome non si mangia tutta la riga.
     const narrow = (c) => c.type === 'checkbox' || c.type === 'notes';
+    // colonne strette: le caselle sono larghe almeno quanto il loro titolo (es. "Sempre")
+    const narrowRem = (c) => (c.type === 'checkbox' ? Math.max(2.4, 0.45 * String(c.label || '').length + 0.9) : 2.4);
     const minRem = (c, m) => (c.type === 'number' || c.type === 'computed' ? (m ? 3.2 : 4) : m ? 3 + 1.5 * (c.width || 1) : 4 + 2.4 * (c.width || 1));
     const track = (c, m) => {
-      if (narrow(c)) return '2.4rem'; // fissa: intestazione e celle restano allineate
+      if (narrow(c)) return `${narrowRem(c)}rem`; // fissa: intestazione e celle restano allineate
       return scroll ? `minmax(${minRem(c, m)}rem, ${c.width || 1}fr)` : `minmax(${c.type === 'number' || c.type === 'computed' ? '3.5rem' : '5rem'}, ${c.width || 1}fr)`;
     };
-    const total = (m) => `${cols.reduce((t, c) => t + (narrow(c) ? 2.4 : minRem(c, m)), 2.4) + (m ? 0.25 : 0.4) * cols.length}rem`;
+    const total = (m) => `${cols.reduce((t, c) => t + (narrow(c) ? narrowRem(c) : minRem(c, m)), 2.4) + (m ? 0.25 : 0.4) * cols.length}rem`;
     const vars = {
       '--cols': `${cols.map((c) => track(c, false)).join(' ')} 2.4rem`,
       '--cols-m': `${cols.map((c) => track(c, true)).join(' ')} 2.4rem`,
@@ -506,8 +557,10 @@ const FIELD_RENDERERS = {
       ...extra,
     });
 
+    // countExclude: righe "speciali" (es. incantesimi sempre preparati) che non contano nei totali
+    const flagKey = f.countExclude?.key;
     const rowEl = (row, ri) => {
-      const tr = styleRow(h('tr'));
+      const tr = styleRow(h('tr', { class: flagKey && row[flagKey] ? 'row-flag' : null }));
       for (const c of cols) {
         const td = h('td', { dataset: { label: c.label || c.key }, class: `cell-${c.type}` });
         const v = row[c.key];
@@ -523,7 +576,12 @@ const FIELD_RENDERERS = {
           });
           td.append(out);
         } else if (c.type === 'checkbox') {
-          td.append(h('input', { type: 'checkbox', checked: !!v, 'aria-label': c.label, onchange: (e) => { updateCell(ri, c.key, e.target.checked); if (groupCol) drawCounts(); } }));
+          // se la riga è "sempre preparata", la casella Prep. è spuntata e bloccata
+          const locked = flagKey && row[flagKey] && f.countCheck?.key === c.key;
+          td.append(h('input', {
+            type: 'checkbox', checked: locked || !!v, disabled: locked, title: locked ? 'Sempre preparato' : c.title || null, 'aria-label': c.label,
+            onchange: (e) => { updateCell(ri, c.key, e.target.checked); if (c.key === flagKey) rebuild(); else if (groupCol) drawCounts(); },
+          }));
         } else if (c.type === 'number') {
           td.append(h('input', { type: 'number', inputmode: 'decimal', step: 'any', class: 'input num', value: v ?? '', 'aria-label': c.label, oninput: (e) => updateCell(ri, c.key, parseNum(e.target.value)) }));
         } else if (c.type === 'select') {
@@ -568,7 +626,7 @@ const FIELD_RENDERERS = {
     const table = (entries) => {
       const head = h('thead', {}, styleRow(h('tr', {}, cols.map((c) => (c.type === 'notes'
         ? h('th', { class: 'th-icon', title: c.label, 'aria-label': c.label }, icon('note'))
-        : h('th', {}, c.label || c.key))), h('th', {}, ''))));
+        : h('th', { title: c.title || null, class: c.type === 'checkbox' ? 'th-check' : null }, c.label || c.key))), h('th', {}, ''))));
       const tbody = h('tbody', {}, entries.map(({ row, ri }) => rowEl(row, ri)));
       return h('div', { class: 'table-wrap' }, h('table', { class: `list${scroll ? ' list-scroll' : ''}` }, entries.length ? head : null, tbody));
     };
@@ -586,6 +644,7 @@ const FIELD_RENDERERS = {
     const visibleGroups = () => {
       const eng = ctx.getEngine();
       const used = new Set(rows().map((r) => groupOf(r)));
+      if (ctx.print) return allGroups.filter((g) => used.has(g.value)); // in stampa solo i livelli con incantesimi
       return allGroups.filter((g) => !g.showIf || used.has(g.value) || eng.visible(g.showIf));
     };
     const groups = allGroups;
@@ -593,12 +652,15 @@ const FIELD_RENDERERS = {
       const v = toNum(row?.[groupCol.key]);
       return groups.some((g) => g.value === v) ? v : groups[0]?.value;
     };
-    const isOpen = (g, n) => { const o = ctx.values[openKey]; return o && g.value in o ? !!o[g.value] : n > 0; };
+    const isOpen = (g, n) => { if (ctx.print) return true; const o = ctx.values[openKey]; return o && g.value in o ? !!o[g.value] : n > 0; };
     const setOpen = (value, open) => ctx.set(openKey, { ...(ctx.values[openKey] || {}), [value]: open });
     const countText = (g, list) => {
       const [one, many] = f.itemLabel || ['voce', 'voci'];
-      let t = `${list.length} ${list.length === 1 ? one : many}`;
-      if (f.countCheck && g.value !== 0 && list.length) t += ` · ${list.filter(({ row }) => row[f.countCheck.key]).length} ${f.countCheck.label}`;
+      const always = flagKey ? list.filter(({ row }) => row[flagKey]) : [];
+      const normal = flagKey ? list.filter(({ row }) => !row[flagKey]) : list;
+      let t = `${normal.length} ${normal.length === 1 ? one : many}`;
+      if (f.countCheck && g.value !== 0 && normal.length) t += ` · ${normal.filter(({ row }) => row[f.countCheck.key]).length} ${f.countCheck.label}`;
+      if (always.length) t += ` · ${always.length} ${f.countExclude.label}`;
       return t;
     };
     const countEls = new Map();
@@ -646,7 +708,7 @@ const FIELD_RENDERERS = {
     draw();
     // se la lista usa l'elenco incantesimi, un pulsante lo apre per vederlo e modificarlo
     let spellBtn = null;
-    if ((f.columns || []).some((c) => c.lookup?.source === 'incantesimi')) {
+    if (!ctx.print && (f.columns || []).some((c) => c.lookup?.source === 'incantesimi')) {
       const text = h('span');
       const setText = () => { const n = loadSpells()?.length; text.textContent = n ? `Elenco incantesimi (${n})` : 'Elenco incantesimi: importa o aggiungi'; };
       setText();
@@ -895,4 +957,30 @@ async function customizeSection(s, ctx) {
     if (Object.keys(cfg).length) all[s.id] = cfg; else delete all[s.id];
   }
   ctx.set('_sezioni', Object.keys(all).length ? all : undefined);
+}
+
+// Schermata della morte (3 fallimenti nei tiri contro morte).
+function deathScreen(reset) {
+  document.querySelector('.death')?.remove();
+  const ns = 'http://www.w3.org/2000/svg';
+  const el = (tag, attrs) => { const n = document.createElementNS(ns, tag); Object.entries(attrs).forEach(([k, v]) => n.setAttribute(k, v)); return n; };
+  const skull = el('svg', { viewBox: '0 0 64 64', class: 'death-skull', 'aria-hidden': 'true' });
+  skull.append(
+    el('path', { d: 'M32 5C17.6 5 7 15.4 7 29c0 8.2 4.1 13.6 9 16.6V52a5 5 0 005 5h22a5 5 0 005-5v-6.4c4.9-3 9-8.4 9-16.6C57 15.4 46.4 5 32 5z', fill: 'currentColor' }),
+    el('circle', { cx: '22', cy: '30', r: '6.5', class: 'death-hole' }),
+    el('circle', { cx: '42', cy: '30', r: '6.5', class: 'death-hole' }),
+    el('path', { d: 'M32 37l-4.5 8h9z', class: 'death-hole' }),
+    el('path', { d: 'M25 50v6M32 50v6M39 50v6', class: 'death-teeth' }));
+  const close = () => { overlay.classList.add('out'); setTimeout(() => overlay.remove(), 300); };
+  const overlay = h('div', { class: 'death', role: 'alertdialog', 'aria-label': 'Morto' },
+    h('div', { class: 'death-inner' }, skull,
+      h('h2', {}, 'Morto'),
+      h('p', {}, 'Tre fallimenti nei tiri contro morte.'),
+      h('div', { class: 'death-actions' },
+        h('button', { type: 'button', class: 'btn', onclick: () => { reset(); close(); } }, 'Azzera i tiri'),
+        h('button', { type: 'button', class: 'btn ghost', onclick: close }, 'Chiudi'))));
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
+  document.addEventListener('keydown', function esc(e) { if (e.key === 'Escape') { close(); document.removeEventListener('keydown', esc); } });
+  document.body.append(overlay);
+  overlay.querySelector('.btn')?.focus();
 }

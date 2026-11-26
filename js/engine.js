@@ -17,6 +17,7 @@ export const FIELD_TYPES = {
   checkbox: { label: 'Casella' },
   select: { label: 'Scelta da elenco' },
   list: { label: 'Lista (tabella)' },
+  deathsaves: { label: 'Tiri contro morte (successi e fallimenti)' },
   features: { label: 'Privilegi (voci richiudibili con usi)' },
   image: { label: 'Immagine' },
 };
@@ -217,6 +218,9 @@ export function validateSystem(system) {
       }
       if (f.type === 'list') {
         const cols = new Set();
+        if (f.type === 'deathsaves') {
+          for (const k of [f.success || 'morte_ok', f.fail || 'morte_ko']) if (!system.sections.some((x) => (x.fields || []).some((y) => y.key === k))) add(`tiri contro morte: manca il campo "${k}"`, where);
+        }
         if (f.groupBy && !(f.columns || []).some((c) => c.key === f.groupBy)) add(`raggruppa per "${f.groupBy}": colonna inesistente`, where);
         for (const g of f.groups || []) if (g && !Array.isArray(g) && g.showIf) formulas.push([String(g.showIf), `${where} › gruppo ${g.label} (visibile se)`]);
         for (const c of f.columns || []) {

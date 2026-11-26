@@ -16,7 +16,7 @@ function route() {
   store.flush();
   const parts = (location.hash.replace(/^#\/?/, '') || '').split('/').filter(Boolean);
   root.replaceChildren();
-  document.querySelectorAll('dialog, .suggest').forEach((d) => d.remove());
+  document.querySelectorAll('dialog, .suggest, .death').forEach((d) => d.remove());
   document.title = 'Schede GdR';
   applyAccent(document.documentElement, null);
   window.scrollTo(0, 0);

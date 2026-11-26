@@ -1,7 +1,7 @@
 // Service worker: rende l'app utilizzabile offline.
 // Strategia "network first" per avere sempre l'ultima versione quando c'è
 // connessione, con ripiego sulla cache quando si è offline.
-const CACHE = 'gdr-schede-v9';
+const CACHE = 'gdr-schede-v11';
 const ASSETS = [
   './', './index.html', './manifest.webmanifest', './css/style.css',
   './js/app.js', './js/ui.js', './js/store.js', './js/theme.js', './js/formula.js',
