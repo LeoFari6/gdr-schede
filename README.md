@@ -107,18 +107,6 @@ docs/FORMATO_MODELLI.md formato JSON dei modelli
 tests/                  test con node:test
 ```
 
-## Creare un modello
-
-Il modo più rapido è duplicare *Generico* dalla home e modificarlo nell'editor.
-Il formato completo, con tutti i tipi di campo e la sintassi delle formule, è descritto in
-[docs/FORMATO_MODELLI.md](docs/FORMATO_MODELLI.md).
-
-## Idee per il futuro
-
-- Sincronizzazione tra dispositivi
-- Condivisione di un personaggio tramite link
-- Galleria di modelli della community
-- Note di sessione e diario del personaggio
 
 ## Note legali
 
