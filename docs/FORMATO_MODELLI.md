@@ -87,7 +87,7 @@ Gli usi e i contatori dei privilegi si recuperano da soli in base alla loro rica
 | `checkbox` | Casella | `menu` (se `true` non compare nella griglia ma come voce del menu ⋯ della scheda; testi facoltativi `menuOff` / `menuOn`) | `@key` → 1 o 0 |
 | `select` | Scelta da elenco | `options` (array di testi) | `@key` → testo |
 | `list` | Tabella con righe aggiungibili | `columns` | `@key` = numero di righe, `@key.colonna` = elenco valori |
-| `features` | Privilegi: voci richiudibili con descrizione (`**grassetto**`, righe `- ` come elenco), usi con ricarica e un livello di sotto-privilegi | `placeholder` (testo quando è vuota), `variant: "journal"` (diario: solo titolo e testo, voci nuove in cima con la data) | `@key` = numero di privilegi |
+| `features` | Privilegi: voci richiudibili con descrizione (`**grassetto**`, righe `- ` come elenco), usi con ricarica e un livello di sotto-privilegi | `placeholder` (testo quando è vuota), `variant: "journal"` (diario: solo titolo e testo, voci nuove in cima con la data), `variant: "notebook"` (schede di appunti: titolo e testo scritto sul posto; `legacyKey` indica un vecchio campo di testo da cui creare la prima scheda, `textPlaceholder` il testo segnaposto delle schede) | `@key` = numero di privilegi |
 | `image` | Immagine (ridimensionata e salvata nella scheda) | | — |
 
 ### Colonne delle liste
@@ -151,6 +151,9 @@ I file `.json` esportati hanno questa forma:
 ```json
 { "format": "gdr-schede", "formatVersion": 1, "type": "character", "character": { … }, "system": { … } }
 ```
+
+Se i testi contengono immagini (righe `![didascalia](img:ID)`, oppure `![didascalia](img:ID 50%)` con la larghezza in percentuale), il file ha anche `images`:
+`{ "ID": "data:image/jpeg;base64,…" }`.
 
 `type` può essere `character` (personaggio con il suo modello), `system` (solo modello) o
 `backup` (tutto). Per ora l'app importa solo `character` e `backup`; i file `system` si possono

@@ -4,6 +4,7 @@ import { hasWeight, weightEnabled, allFields, applyRest } from '../engine.js';
 import { renderSheet } from '../sheet-render.js';
 import { themeToggle, applyAccent, pickAccent } from '../theme.js';
 import { openSpellList } from './spell-list.js';
+import { withImages } from '../images.js';
 
 // Tab aperta per ogni personaggio, per ritrovarla dopo un ridisegno.
 const lastTab = new Map();
@@ -138,7 +139,7 @@ export function renderCharacter(root, id) {
         usesSpellList ? { label: 'Elenco incantesimi', icon: 'book', onClick: openSpellList } : null,
         ...menuToggles,
         hasWeight(sys) ? { label: weightOn ? 'Disattiva peso e ingombro' : 'Attiva peso e ingombro', icon: 'weight', onClick: toggleWeight } : null,
-        { label: 'Esporta (.json)', icon: 'download', onClick: () => { download(`${slugify(c.name)}.json`, store.exportCharacter(c.id)); toast('Scheda esportata'); } },
+        { label: 'Esporta (.json)', icon: 'download', onClick: async () => { download(`${slugify(c.name)}.json`, await withImages(store.exportCharacter(c.id))); toast('Scheda esportata'); } },
         { label: 'Stampa / PDF', icon: 'print', onClick: () => { buildPrint(); window.print(); } },
         { label: 'Duplica', icon: 'copy', onClick: () => { const d = store.duplicateCharacter(c.id); location.hash = `#/c/${d.id}`; } },
         store.isBuiltin(sys.id) ? null : { label: 'Modifica modello', icon: 'edit', onClick: () => { location.hash = `#/t/${sys.id}`; } },

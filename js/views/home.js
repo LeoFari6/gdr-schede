@@ -2,6 +2,7 @@ import { h, icon, btn, modal, toast, confirmDialog, promptDialog, download, pick
 import { store } from '../store.js';
 import { allFields, defaultValue } from '../engine.js';
 import { themeToggle, applyAccent } from '../theme.js';
+import { withImages, importImages } from '../images.js';
 
 export function renderHome(root) {
   const chars = store.characters();
@@ -16,7 +17,7 @@ export function renderHome(root) {
       themeToggle(),
       menuButton([
         { label: 'Importa personaggio o backup (.json)', icon: 'upload', onClick: () => importFile(root) },
-        { label: 'Esporta backup completo', icon: 'download', onClick: () => { download(`schede-gdr-backup-${new Date().toISOString().slice(0, 10)}.json`, store.exportAll()); toast('Backup esportato'); } },
+        { label: 'Esporta backup completo', icon: 'download', onClick: async () => { download(`schede-gdr-backup-${new Date().toISOString().slice(0, 10)}.json`, await withImages(store.exportAll())); toast('Backup esportato'); } },
       ], { title: 'Altre azioni' })));
 
   const charGrid = h('div', { class: 'cards' },
@@ -90,7 +91,7 @@ function characterCard(c, root) {
         h('p', { class: 'card-meta' }, h('span', { class: 'chip' }, sys?.name || '?'), h('span', { class: 'muted' }, relativeTime(c.updatedAt))))),
     menuButton([
       { label: 'Duplica', icon: 'copy', onClick: () => { store.duplicateCharacter(c.id); rerender(root); } },
-      { label: 'Esporta (.json)', icon: 'download', onClick: () => download(`${slugify(c.name)}.json`, store.exportCharacter(c.id)) },
+      { label: 'Esporta (.json)', icon: 'download', onClick: async () => download(`${slugify(c.name)}.json`, await withImages(store.exportCharacter(c.id))) },
       { label: 'Elimina', icon: 'trash', danger: true, onClick: async () => {
         if (await confirmDialog('Eliminare il personaggio?', `"${c.name}" verrà eliminato da questo dispositivo. L'operazione non si può annullare.`, 'Elimina', true)) {
           store.deleteCharacter(c.id); rerender(root); toast('Personaggio eliminato');
@@ -158,6 +159,10 @@ async function importFile(root) {
   try {
     const data = JSON.parse(await file.text());
     const r = store.importData(data);
+    // immagini incluse nel file (appunti, diario, privilegi…)
+    if (data && data.images) {
+      try { r.images = await importImages(data.images); } catch (e) { r.warnings.push(`Immagini non importate: ${e.message}`); }
+    }
     const parts = [];
     if (r.characters) parts.push(`${r.characters} personaggi`);
     if (r.systems) parts.push(`${r.systems} modelli`);

@@ -4,6 +4,7 @@ import { parse, evaluate, compile, interpolate, formatValue, FormulaError } from
 import { Engine, validateSystem, hasWeight, normalizeFeature, resetFeatureUses, counterMax, applyRest } from '../js/engine.js';
 import { BUILTIN_SYSTEMS } from '../js/systems.js';
 import { parseCSV, spellsFromCSV, searchSpells, spellsToCSV, mergeSpells } from '../js/spells.js';
+import { imageIdsIn, IMG_LINE } from '../js/images.js';
 
 const calc = (src, vars = {}) => evaluate(compile(src), { resolve: (n) => {
   if (!(n in vars)) throw new FormulaError(`Campo @${n} inesistente`);
@@ -349,4 +350,38 @@ test('valori inseriti a mano al posto del calcolo', () => {
   assert.equal(m.resolve('acrobazia'), 5);
   assert.equal(m.manual('des_mod'), 5);
   assert.equal(m.manual('iniziativa'), undefined);
+});
+
+test('immagini nei testi: riconoscimento delle righe e raccolta degli ID', () => {
+  assert.deepEqual(IMG_LINE.exec('![Tabella dei bottini](img:i1abc)').slice(1, 3), ['Tabella dei bottini', 'i1abc']);
+  assert.equal(IMG_LINE.test('testo ![x](img:i1) altro'), false); // solo su una riga a sé
+  const values = {
+    note: 'Prima\n![](img:iA)\nDopo',
+    diario: [{ nome: 'S1', testo: '![mappa](img:iB)' }],
+    privilegi_classe: [{ figli: [{ testo: 'vedi ![](img:iA)' }] }],
+    altro: 42,
+  };
+  assert.deepEqual([...imageIdsIn(values)].sort(), ['iA', 'iB']);
+});
+
+test('schede di appunti: modello D&D e conteggio', () => {
+  const dnd = BUILTIN_SYSTEMS.find((s) => s.id === 'dnd5e');
+  const f = dnd.sections.find((s) => s.id === 'appunti').fields[0];
+  assert.equal(f.type, 'features');
+  assert.equal(f.variant, 'notebook');
+  assert.equal(f.legacyKey, 'note');
+  assert.equal(dnd.sections.find((s) => s.id === 'diario').fields[0].variant, 'journal');
+  const e = new Engine(dnd, { schede_note: [{ nome: 'PNG', testo: '' }, { nome: 'Luoghi', testo: '' }] });
+  assert.equal(e.resolve('schede_note'), 2);
+});
+
+test('immagini nei testi: grandezza scritta nella riga', async () => {
+  const { setImageSize } = await import('../js/images.js');
+  const t = 'prima\n![Tabella](img:abc)\n![](img:xyz 40%)';
+  assert.equal(IMG_LINE.exec('![Tabella](img:abc 50%)')[3], '50');
+  assert.equal(IMG_LINE.exec('![Tabella](img:abc)')[3], undefined);
+  assert.equal(setImageSize(t, 'abc', 50), 'prima\n![Tabella](img:abc 50%)\n![](img:xyz 40%)');
+  assert.equal(setImageSize(t, 'xyz', null), 'prima\n![Tabella](img:abc)\n![](img:xyz)');
+  assert.equal(setImageSize(t, 'abc', 3), 'prima\n![Tabella](img:abc 15%)\n![](img:xyz 40%)');
+  assert.deepEqual([...imageIdsIn({ a: t })], ['abc', 'xyz']);
 });

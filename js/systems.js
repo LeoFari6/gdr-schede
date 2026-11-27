@@ -354,16 +354,21 @@ export const DND5E = {
     },
     spellcasting(1),
     spellcasting(2),
+    // ---- tab Storia: chi è il personaggio ----
     {
-      id: 'appunti', title: 'Appunti', tab: 'Note', columns: 1,
-      fields: [{ key: 'note', label: '', type: 'richtext', rows: 6, placeholder: 'Appunti veloci: nomi, indizi, cose da ricordare… Tocca per scrivere.' }],
+      id: 'aspetto', title: 'Aspetto', tab: 'Storia', columns: 6,
+      fields: [
+        { key: 'eta', label: 'Età', type: 'text' },
+        { key: 'altezza', label: 'Altezza', type: 'text', placeholder: 'es. 1,75 m' },
+        { key: 'peso_pg', label: 'Peso', type: 'text', placeholder: 'es. 70 kg' },
+        { key: 'occhi', label: 'Occhi', type: 'text' },
+        { key: 'capelli', label: 'Capelli', type: 'text' },
+        { key: 'pelle', label: 'Carnagione', type: 'text' },
+        { key: 'aspetto', label: 'Descrizione', type: 'richtext', rows: 3, span: 6, placeholder: 'Come appare, segni particolari, abbigliamento… Tocca per scrivere.' },
+      ],
     },
     {
-      id: 'diario', title: 'Diario delle sessioni', tab: 'Note', columns: 1,
-      fields: [{ key: 'diario', label: '', type: 'features', variant: 'journal', placeholder: 'Nessuna sessione annotata. Le nuove voci compaiono in cima.' }],
-    },
-    {
-      id: 'personalita', title: 'Personalità', tab: 'Note', columns: 2,
+      id: 'personalita', title: 'Personalità', tab: 'Storia', columns: 2,
       fields: [
         { key: 'tratti', label: 'Tratti caratteriali', type: 'richtext', rows: 3 },
         { key: 'ideali', label: 'Ideali', type: 'richtext', rows: 3 },
@@ -372,11 +377,21 @@ export const DND5E = {
       ].map((f) => ({ ...f, span: 1 })),
     },
     {
-      id: 'storia', title: 'Aspetto e storia', tab: 'Note', columns: 2,
-      fields: [
-        { key: 'aspetto', label: 'Aspetto', type: 'richtext', rows: 4, span: 1, placeholder: 'Età, altezza, occhi, segni particolari…' },
-        { key: 'biografia', label: 'Storia', type: 'richtext', rows: 4, span: 1, placeholder: 'Da dove viene, cosa cerca…' },
-      ],
+      id: 'storia', title: 'Storia del personaggio', tab: 'Storia', columns: 1,
+      fields: [{ key: 'biografia', label: '', type: 'richtext', rows: 6, placeholder: 'Da dove viene, cosa ha vissuto, cosa cerca… Tocca per scrivere.' }],
+    },
+    {
+      id: 'alleati', title: 'Alleati e organizzazioni', tab: 'Storia', columns: 1,
+      fields: [{ key: 'alleati', label: '', type: 'richtext', rows: 3, placeholder: 'Persone, gilde, fazioni con cui hai legami… Tocca per scrivere.' }],
+    },
+    // ---- tab Note: per giocare ----
+    {
+      id: 'appunti', title: 'Appunti', tab: 'Note', columns: 1,
+      fields: [{ key: 'schede_note', label: '', type: 'features', variant: 'notebook', legacyKey: 'note', placeholder: 'Nessuna scheda. Creane una per ogni argomento: PNG, luoghi, indizi, tabelle…', textPlaceholder: 'Nomi, indizi, cose da ricordare… Tocca per scrivere.' }],
+    },
+    {
+      id: 'diario', title: 'Diario delle sessioni', tab: 'Note', columns: 1,
+      fields: [{ key: 'diario', label: '', type: 'features', variant: 'journal', placeholder: 'Nessuna sessione annotata. Le nuove voci compaiono in cima.' }],
     },
   ],
 };

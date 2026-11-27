@@ -20,7 +20,7 @@ const OPT = {
   columns: { label: 'Colonne', kind: 'columns' },
   showIf: { label: 'Visibile solo se (formula)', kind: 'formula', ph: 'es. @multiclasse' },
   tile: { label: 'Mostralo come tessera (valore grande e centrato)', kind: 'bool' },
-  variant: { label: 'Stile', kind: 'select', options: [['', 'Privilegi (usi, contatori, sotto-voci)'], ['journal', 'Diario (titolo e testo, nuove voci in cima)']] },
+  variant: { label: 'Stile', kind: 'select', options: [['', 'Privilegi (usi, contatori, sotto-voci)'], ['journal', 'Diario (titolo e testo, nuove voci in cima)'], ['notebook', 'Schede di appunti (titolo e testo da scrivere sul posto)']] },
   menu: { label: 'Mostrala nel menu ⋯ della scheda invece che nella griglia (es. multiclasse)', kind: 'bool' },
   rowSpan: { label: 'Altezza nella griglia (righe occupate, su desktop)', kind: 'number' },
   weight: { label: 'Fa parte del peso/ingombro (nascosto se il personaggio lo disattiva)', kind: 'bool' },

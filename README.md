@@ -31,9 +31,18 @@ offline e si installa sul telefono come un'app.
     la ricarica (riposo breve, lungo, alba) e una tabella di contatori propri (es. Punti
     Stregoneria, col massimo anche a formula come `@livello`). *Riposo breve* e *Riposo lungo*
     nel menu ⋯ recuperano usi e contatori.
-  - **Note:** appunti veloci, diario delle sessioni (le voci nuove in cima, con la data),
-    personalità, aspetto e storia. Tutto in testo formattato: si legge impaginato e un tocco
-    apre la modifica; si scrive con `**grassetto**`, `*corsivo*` e righe `- ` per gli elenchi.
+  - **Storia:** aspetto (età, altezza, peso, occhi, capelli, carnagione e descrizione),
+    personalità, storia del personaggio, alleati e organizzazioni.
+  - **Note:** appunti divisi in schede (PNG, luoghi, indizi… si aggiungono, si rinominano, si
+    eliminano, si aprono e si chiudono, e il testo si scrive direttamente) e diario delle sessioni
+    (le voci nuove in cima, con la data; quelle chiuse mostrano un'anteprima).
+  - Testi formattati: si leggono impaginati e un tocco apre la modifica; si scrive con
+    `**grassetto**`, `*corsivo*`, righe `- ` per gli elenchi, `# ` per i titoli e `---` per una
+    linea di separazione.
+  - **Immagini nei testi:** "Aggiungi immagine" mentre scrivi (appunti, storia, diario, privilegi);
+    vengono ridotte e salvate a parte nel browser, si aprono a schermo intero con un tocco e
+    sono incluse nei file esportati. Con ⤢ sull'immagine se ne sceglie la grandezza (piccola,
+    media, grande, intera o col cursore).
 - **Generico:** caratteristiche, punti vita, inventario, capacità e note.
 - **Valori a mano.** Ogni valore calcolato (iniziativa, competenza, modificatori, abilità, CD…)
   si tocca e si può scrivere a mano; "Automatico" torna al calcolo. I valori a mano sono

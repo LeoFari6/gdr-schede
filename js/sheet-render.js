@@ -3,8 +3,9 @@
 import { h, icon, toast, pickFile, readImageResized, modal, confirmDialog, holdRepeat } from './ui.js';
 import { Engine, allFields, defaultValue, weightEnabled, normalizeFeature, normalizeCounter, counterMax, RECHARGE, MAX_USES } from './engine.js';
 import { toNum, formatValue, interpolate } from './formula.js';
-import { richText, autoGrow, FORMAT_HINT } from './richtext.js';
+import { richText, autoGrow, FORMAT_HINT, plainText } from './richtext.js';
 import { loadSpells, searchSpells } from './spells.js';
+import { addImageFromFile, setImageSize } from './images.js';
 import { openSpellList } from './views/spell-list.js';
 
 // options.weight: mostra campi e colonne marcati "weight" (peso/ingombro).
@@ -95,6 +96,13 @@ function renderSection(s, ctx) {
     ctx.updaters.push(() => { h2.textContent = interpolate(s.title, ctx.getEngine().resolver()).trim(); });
   }
   if (s.showIf) ctx.updaters.push(() => { sec.hidden = !ctx.getEngine().visible(s.showIf); });
+  // pallini omogenei: tutti i campi a pallini della sezione usano la grandezza del più lungo
+  if ((s.fields || []).some((f) => f.type === 'dots')) {
+    ctx.updaters.push(() => {
+      const ns = [...grid.querySelectorAll('.f-dots:not([hidden]) .dots')].map((b) => Number(b.style.getPropertyValue('--n')) || 0);
+      grid.style.setProperty('--dots-n', String(Math.max(1, ...ns)));
+    });
+  }
   return sec;
 }
 
@@ -202,30 +210,8 @@ const FIELD_RENDERERS = {
   // Testo formattato: si legge già impaginato, un clic lo apre in modifica.
   // La formattazione si scrive a mano: **grassetto**, *corsivo*, righe "- ".
   richtext(f, ctx, wrap) {
-    const text = () => String(raw(f, ctx) ?? '');
-    const view = h('div', { class: 'rt-view', tabindex: '0', role: 'button', 'aria-label': `Modifica ${f.label || f.key}` });
-    const ta = autoGrow(h('textarea', { class: 'input rt-input', placeholder: f.placeholder || 'Scrivi qui…', oninput: (e) => ctx.set(f.key, e.target.value) }), f.rows || 4);
-    const editor = h('div', { class: 'rt-editor', hidden: true });
-    const drawView = () => view.replaceChildren(...(text().trim()
-      ? richText(text())
-      : [h('span', { class: 'rt-empty' }, f.placeholder || 'Tocca per scrivere…')]));
-    const open = () => {
-      ta.value = text();
-      view.hidden = true;
-      editor.hidden = false;
-      ta.fit();
-      ta.focus();
-      ta.setSelectionRange(ta.value.length, ta.value.length);
-    };
-    const close = () => { editor.hidden = true; view.hidden = false; drawView(); };
-    view.addEventListener('click', (e) => { if (!e.target.closest('a')) open(); });
-    view.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); } });
-    editor.addEventListener('focusout', (e) => { if (!editor.contains(e.relatedTarget)) close(); });
-    ta.addEventListener('keydown', (e) => { if (e.key === 'Escape') { e.preventDefault(); close(); } });
-    editor.append(ta,
-      h('div', { class: 'rt-actions' }, h('button', { type: 'button', class: 'btn small primary', onclick: close }, 'Fatto')));
-    drawView();
-    wrap.append(h('div', { class: 'stack' }, f.label ? label(f) : null, view, editor));
+    const rt = inlineRichText({ get: () => String(raw(f, ctx) ?? ''), set: (v) => ctx.set(f.key, v), placeholder: f.placeholder, rows: f.rows, label: f.label || f.key });
+    wrap.append(h('div', { class: 'stack' }, f.label ? label(f) : null, ...rt));
   },
 
   number(f, ctx, wrap) {
@@ -410,9 +396,19 @@ const FIELD_RENDERERS = {
   // contatore degli usi, tabella di contatori e un livello di sotto-privilegi.
   features(f, ctx, wrap) {
     // variant "journal": voci semplici (titolo + testo), le nuove in cima con la data
+    // variant "notebook": schede di appunti col testo modificabile sul posto
     const journal = f.variant === 'journal';
-    const box = h('div', { class: `feats${journal ? ' journal' : ''}` });
-    const items = () => (Array.isArray(raw(f, ctx)) ? raw(f, ctx) : []).map((r) => {
+    const notebook = f.variant === 'notebook';
+    const simple = journal || notebook;
+    const box = h('div', { class: `feats${journal ? ' journal' : ''}${notebook ? ' journal notebook' : ''}` });
+    const stored = () => {
+      const v = ctx.values[f.key];
+      if (Array.isArray(v)) return v;
+      // vecchie schede: il testo unico degli appunti diventa la prima scheda
+      const old = f.legacyKey ? ctx.values[f.legacyKey] : '';
+      return typeof old === 'string' && old.trim() ? [{ nome: 'Appunti', testo: old, aperto: true }] : [];
+    };
+    const items = () => stored().map((r) => {
       const n = normalizeFeature(r);
       if (ctx.print) { n.aperto = true; n.figli.forEach((c) => { c.aperto = true; }); } // in stampa si legge tutto
       return n;
@@ -454,7 +450,7 @@ const FIELD_RENDERERS = {
     const editBtn = (it, path) => h('button', {
       type: 'button', class: 'btn ghost sq small feat-edit', title: 'Modifica', 'aria-label': `Modifica ${it.nome}`,
       onclick: async () => {
-        const r = await editFeature(it, { child: path.length === 2, simple: journal });
+        const r = notebook ? await editNotebookTab(it) : await editFeature(it, { child: path.length === 2, simple: journal });
         if (r === 'delete') change(path, (x, l, j) => l.splice(j, 1));
         else if (r) change(path, (x) => Object.assign(x, r));
       },
@@ -466,9 +462,17 @@ const FIELD_RENDERERS = {
     }, icon('down'), h('span', {}, it.nome || 'Senza nome'),
     !it.aperto && it.figli.length ? h('small', { class: 'feat-count' }, `${it.figli.length}`) : null);
 
-    const body = (it, path) => [
+    // nelle schede di appunti il testo si scrive direttamente, senza ridisegnare la lista
+    const notebookText = (it, i) => inlineRichText({
+      get: () => items()[i]?.testo ?? '',
+      set: (v) => { const next = items(); if (next[i]) { next[i].testo = v; ctx.set(f.key, next); } },
+      placeholder: f.textPlaceholder || 'Tocca per scrivere…', rows: 4, label: it.nome,
+    });
+    const body = (it, path) => notebook && !ctx.print ? notebookText(it, path[0]) : [
       counters(it, path),
-      it.testo.trim() ? h('div', { class: 'feat-text' }, richText(it.testo)) : null,
+      it.testo.trim() ? h('div', { class: 'feat-text' }, richText(it.testo, ctx.print ? {} : {
+        onImageSize: (id, pct) => change(path, (x) => { x.testo = setImageSize(x.testo, id, pct); }),
+      })) : null,
     ];
 
     const child = (it, path) => h('div', { class: `feat-child${it.aperto ? ' open' : ''}` },
@@ -477,12 +481,15 @@ const FIELD_RENDERERS = {
 
     const item = (it, i) => {
       const path = [i];
+      // nel diario, una voce chiusa mostra le prime righe come anteprima
+      const preview = simple && !it.aperto && it.testo.trim() ? h('p', { class: 'feat-preview' }, plainText(it.testo)) : null;
       return h('div', { class: `feat${it.aperto ? ' open' : ''}` },
         h('div', { class: 'feat-head' }, toggleBtn(it, path, 'feat-toggle'), itemUses(it, path), editBtn(it, path)),
+        preview,
         it.aperto ? h('div', { class: 'feat-body' },
           body(it, path),
           it.figli.map((c, j) => child(c, [i, j])),
-          journal ? null : h('button', { type: 'button', class: 'btn ghost small feat-add-child', onclick: async () => {
+          simple ? null : h('button', { type: 'button', class: 'btn ghost small feat-add-child', onclick: async () => {
             const r = await editFeature(normalizeFeature({}, 1), { child: true, isNew: true });
             if (r && r !== 'delete') change(path, (x) => { x.figli.push({ ...r, aperto: true }); });
           } }, icon('plus'), h('span', {}, 'Sotto-privilegio'))) : null);
@@ -490,16 +497,18 @@ const FIELD_RENDERERS = {
 
     const draw = () => {
       const list = items();
+      const add = h('button', { type: 'button', class: `btn small add-row${journal ? ' add-top' : ''}`, onclick: async () => {
+        const blank = normalizeFeature(journal ? { nome: new Date().toLocaleDateString('it-IT', { day: 'numeric', month: 'long', year: 'numeric' }) } : {});
+        const r = notebook ? await editNotebookTab(blank, true) : await editFeature(blank, { isNew: true, simple: journal });
+        if (!r || r === 'delete') return;
+        const entry = { ...r, aperto: true };
+        commit(journal ? [entry, ...items()] : [...items(), entry]);
+      } }, icon('plus'), h('span', {}, f.addLabel || (journal ? 'Nuova voce' : notebook ? 'Nuova scheda' : 'Aggiungi privilegio')));
       box.replaceChildren(...[
+        journal ? add : null, // nel diario le voci nuove vanno in cima: anche il pulsante
         ...list.map(item),
-        list.length ? null : h('p', { class: 'muted small feats-empty' }, f.placeholder || (journal ? 'Nessuna voce.' : 'Nessun privilegio.')),
-        h('button', { type: 'button', class: 'btn small add-row', onclick: async () => {
-          const blank = normalizeFeature(journal ? { nome: new Date().toLocaleDateString('it-IT', { day: 'numeric', month: 'long', year: 'numeric' }) } : {});
-          const r = await editFeature(blank, { isNew: true, simple: journal });
-          if (!r || r === 'delete') return;
-          const entry = { ...r, aperto: true };
-          commit(journal ? [entry, ...items()] : [...items(), entry]);
-        } }, icon('plus'), h('span', {}, f.addLabel || (journal ? 'Nuova voce' : 'Aggiungi privilegio'))),
+        list.length ? null : h('p', { class: 'muted small feats-empty' }, f.placeholder || (journal ? 'Nessuna voce.' : notebook ? 'Nessuna scheda.' : 'Nessun privilegio.')),
+        journal ? null : add,
       ].filter(Boolean));
     };
     // le formule dei massimi (es. @livello) cambiano con il resto della scheda
@@ -766,6 +775,26 @@ function usesControl({ max, used, recharge, label = '', onChange, getUsed = () =
 }
 
 // Finestra di modifica di un privilegio. Restituisce i dati, 'delete' o null.
+/** Nome di una scheda di appunti (nuova o esistente), con l'eliminazione. */
+async function editNotebookTab(it, isNew = false) {
+  const nome = h('input', { class: 'input', type: 'text', value: it.nome, placeholder: 'es. PNG incontrati, Luoghi, Indizi…' });
+  const r = await modal({
+    title: isNew ? 'Nuova scheda' : 'Modifica scheda',
+    body: h('label', { class: 'stack' }, h('span', { class: 'lbl' }, 'Nome della scheda'), nome),
+    actions: [
+      isNew ? null : { label: 'Elimina', value: 'delete', cls: 'danger' },
+      { label: 'Annulla', value: null },
+      { label: isNew ? 'Crea' : 'Salva', value: 'save', cls: 'primary' },
+    ].filter(Boolean),
+  });
+  if (r === 'delete') {
+    const words = it.testo.trim() ? ' con tutto il suo contenuto' : '';
+    return (await confirmDialog('Eliminare la scheda?', `"${it.nome || 'Senza nome'}"${words} verrà eliminata.`, 'Elimina', true)) ? 'delete' : null;
+  }
+  if (r !== 'save') return null;
+  return { nome: nome.value.trim() || 'Senza nome', testo: it.testo, usi: 0, usati: 0, ricarica: '', contatori: [] };
+}
+
 async function editFeature(it, { child = false, isNew = false, simple = false } = {}) {
   const nome = h('input', { class: 'input', type: 'text', value: it.nome, placeholder: simple ? 'es. Sessione 4 · La cripta' : child ? 'es. Metamagia' : 'es. Sorgente di Magia' });
   const testo = autoGrow(h('textarea', { class: 'input note-area', rows: 8, value: it.testo, placeholder: simple ? 'Cosa è successo…' : 'Descrizione…' }), 8);
@@ -794,7 +823,8 @@ async function editFeature(it, { child = false, isNew = false, simple = false } 
     wide: true,
     body: h('div', { class: 'stack gap' },
       field(simple ? 'Titolo' : 'Nome', nome),
-      field(simple ? 'Testo' : 'Descrizione', testo, FORMAT_HINT),
+      h('div', { class: 'stack' }, h('span', { class: 'lbl' }, simple ? 'Testo' : 'Descrizione'), testo,
+        h('div', { class: 'rt-actions start' }, imageButton(testo)), h('small', { class: 'hint' }, FORMAT_HINT)),
       simple ? null : h('div', { class: 'feat-form-row' },
         field('Usi del privilegio (0 = nessuno)', usi),
         field('Si recupera con', ricarica)),
@@ -983,4 +1013,67 @@ function deathScreen(reset) {
   document.addEventListener('keydown', function esc(e) { if (e.key === 'Escape') { close(); document.removeEventListener('keydown', esc); } });
   document.body.append(overlay);
   overlay.querySelector('.btn')?.focus();
+}
+
+// Pulsante "Aggiungi immagine" per una textarea di testo formattato: sceglie un
+// file, lo riduce, lo salva e inserisce la riga dell'immagine dove c'è il cursore.
+/** Testo formattato che si legge impaginato e si modifica con un tocco: [vista, editor]. */
+function inlineRichText({ get, set, placeholder, rows = 3, label: name = '' }) {
+  const view = h('div', { class: 'rt-view', tabindex: '0', role: 'button', 'aria-label': `Modifica ${name}`, style: { minHeight: `${1.6 * rows + 1.3}em` } });
+  const ta = autoGrow(h('textarea', { class: 'input rt-input', placeholder: placeholder || 'Scrivi qui…', oninput: (e) => set(e.target.value) }), Math.max(rows, 4));
+  const editor = h('div', { class: 'rt-editor', hidden: true });
+  const onImageSize = (id, pct) => { set(setImageSize(get(), id, pct)); drawView(); };
+  const drawView = () => view.replaceChildren(...(get().trim()
+    ? richText(get(), { onImageSize })
+    : [h('span', { class: 'rt-empty' }, placeholder || 'Tocca per scrivere…')]));
+  const open = () => {
+    ta.value = get();
+    view.hidden = true;
+    editor.hidden = false;
+    ta.fit();
+    ta.focus();
+    ta.setSelectionRange(ta.value.length, ta.value.length);
+  };
+  const close = () => { editor.hidden = true; view.hidden = false; drawView(); };
+  view.addEventListener('click', (e) => { if (!e.target.closest('a')) open(); });
+  view.addEventListener('keydown', (e) => { if (e.target === view && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); open(); } });
+  let picking = false; // mentre si sceglie un'immagine l'editor non si chiude
+  editor.addEventListener('focusout', (e) => { if (!picking && !editor.contains(e.relatedTarget)) close(); });
+  ta.addEventListener('keydown', (e) => { if (e.key === 'Escape') { e.preventDefault(); close(); } });
+  const addImage = imageButton(ta, (on) => { picking = on; });
+  editor.append(ta,
+    h('div', { class: 'rt-actions' }, addImage, h('button', { type: 'button', class: 'btn small primary', onclick: close }, 'Fatto')));
+  drawView();
+  return [view, editor];
+}
+
+function imageButton(ta, setPicking = () => {}) {
+  return h('button', {
+    type: 'button', class: 'btn small ghost',
+    onmousedown: (e) => e.preventDefault(),
+    onclick: async () => {
+      const at = [ta.selectionStart ?? ta.value.length, ta.selectionEnd ?? ta.value.length];
+      setPicking(true);
+      try {
+        const file = await pickFile('image/*');
+        if (!file) return;
+        const line = await addImageFromFile(file);
+        const before = ta.value.slice(0, at[0]);
+        const after = ta.value.slice(at[1]);
+        const pre = before && !before.endsWith('\n') ? '\n' : '';
+        const post = after.startsWith('\n') ? '' : '\n';
+        ta.value = `${before}${pre}${line}${post}${after}`;
+        const caret = (before + pre + line + post).length;
+        ta.focus();
+        ta.setSelectionRange(caret, caret);
+        ta.dispatchEvent(new Event('input', { bubbles: true }));
+        toast('Immagine aggiunta: tra le [ ] puoi scrivere una didascalia', 'ok', 3500);
+      } catch (e) {
+        toast(`Immagine non aggiunta: ${e.message}`, 'error', 5000);
+      } finally {
+        setPicking(false);
+        if (document.activeElement !== ta) ta.focus();
+      }
+    },
+  }, icon('upload'), h('span', {}, 'Aggiungi immagine'));
 }
