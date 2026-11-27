@@ -11,14 +11,16 @@ export function applyTheme() {
 
 matchMedia('(prefers-color-scheme: dark)').addEventListener('change', applyTheme);
 
+/** Passa da chiaro a scuro e viceversa (e lo ricorda). */
+export function toggleTheme() {
+  store.setSetting('theme', document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark');
+  applyTheme();
+}
+
 export function themeToggle() {
   const b = h('button', { type: 'button', class: 'btn ghost sq', title: tr('Tema chiaro/scuro'), 'aria-label': tr('Cambia tema') });
   const draw = () => b.replaceChildren(icon(document.documentElement.dataset.theme === 'dark' ? 'sun' : 'moon'));
-  b.addEventListener('click', () => {
-    store.setSetting('theme', document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark');
-    applyTheme();
-    draw();
-  });
+  b.addEventListener('click', () => { toggleTheme(); draw(); });
   draw();
   return b;
 }

@@ -3,7 +3,6 @@ import { toast } from './ui.js';
 import { applyTheme, applyAccent } from './theme.js';
 import { renderHome } from './views/home.js';
 import { renderCharacter } from './views/sheet.js';
-import { renderEditor } from './views/editor.js';
 import { t, lang } from './i18n.js';
 
 document.documentElement.lang = lang;
@@ -24,7 +23,6 @@ function route() {
   applyAccent(document.documentElement, null);
   window.scrollTo(0, 0);
   if (parts[0] === 'c' && parts[1]) renderCharacter(root, decodeURIComponent(parts[1]));
-  else if (parts[0] === 't' && parts[1]) renderEditor(root, decodeURIComponent(parts[1]));
   else renderHome(root);
 }
 

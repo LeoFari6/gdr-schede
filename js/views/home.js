@@ -1,4 +1,4 @@
-import { h, icon, btn, modal, toast, confirmDialog, promptDialog, download, pickFile, menuButton, relativeTime, slugify } from '../ui.js';
+import { h, icon, modal, toast, confirmDialog, download, pickFile, menuButton, relativeTime, slugify } from '../ui.js';
 import { store } from '../store.js';
 import { allFields, defaultValue, Engine } from '../engine.js';
 import { themeToggle, applyAccent } from '../theme.js';
@@ -13,8 +13,7 @@ const langButton = () => {
 
 export function renderHome(root) {
   const chars = store.characters();
-  const builtins = store.systems().filter((s) => store.isBuiltin(s.id));
-  const custom = store.systems().filter((s) => !store.isBuiltin(s.id));
+  const builtins = store.systems();
   // D&D 5e per prima e più in evidenza
   builtins.sort((a, b) => (b.id === 'dnd5e') - (a.id === 'dnd5e'));
 
@@ -35,37 +34,20 @@ export function renderHome(root) {
   root.append(header, h('main', { class: 'home' },
     h('section', { class: 'home-sec' },
       h('div', { class: 'home-sec-head' }, h('h2', {}, t('Personaggi')), h('span', { class: 'count' }, chars.length || '')),
-      chars.length ? null : h('p', { class: 'muted intro' }, t('Crea il tuo primo personaggio: scheda di D&D 5ª edizione oppure generica. Tutto resta salvato in questo browser.')),
+      chars.length ? null : h('p', { class: 'muted intro' }, t('Crea il tuo primo personaggio: scheda di D&D 5ª edizione oppure di Cyberpunk RED. Tutto resta salvato in questo browser.')),
       charGrid),
 
     h('section', { class: 'home-sec' },
       h('div', { class: 'home-sec-head' }, h('h2', {}, t('Schede'))),
-      h('div', { class: 'picks' }, builtins.map((s) => pickCard(s, s.id === 'dnd5e')))),
-
-    h('section', { class: 'home-sec' },
-      h('div', { class: 'home-sec-head' },
-        h('h2', {}, t('I tuoi modelli')), h('span', { class: 'count' }, custom.length || ''),
-        btn(t('Nuovo modello'), async () => {
-          const name = await promptDialog(t('Nuovo modello'), t('Nome del modello'));
-          if (!name) return;
-          const sys = store.newSystem(name);
-          location.hash = `#/t/${sys.id}`;
-        }, { iconName: 'plus', cls: 'small ghost push' })),
-      custom.length
-        ? h('div', { class: 'systems' }, custom.map((s) => systemRow(s, root)))
-        : h('p', { class: 'muted' }, t('Qui compaiono le schede che crei tu. Per partire da una scheda inclusa usa "Duplica e modifica" dal suo menu.')))));
+      h('div', { class: 'picks' }, builtins.map((s) => pickCard(s, s.id === 'dnd5e'))))));
 }
 
 // Scheda inclusa da scegliere: un tocco crea un nuovo personaggio con quella scheda.
 function pickCard(s, main) {
-  return h('article', { class: `pick${main ? ' pick-main' : ''}${s.theme === 'fantasy' ? ' fantasy' : ''}` },
+  return h('article', { class: `pick${main ? ' pick-main' : ''}${s.theme ? ` ${s.theme}` : ''}` },
     h('button', { type: 'button', class: 'pick-body', onclick: () => newCharacter(s.id) },
       h('h3', {}, t(s.name)),
-      h('span', { class: 'pick-cta' }, icon('plus'), t('Nuovo personaggio'))),
-    menuButton([
-      { label: t('Duplica e modifica come modello tuo'), icon: 'copy', onClick: () => { const copy = store.duplicateSystem(s.id); location.hash = `#/t/${copy.id}`; } },
-      { label: t('Esporta (.json)'), icon: 'download', onClick: () => download(`modello-${slugify(s.name)}.json`, store.exportSystem(s.id)) },
-    ], { title: t('Azioni per {nome}', { nome: t(s.name) }) }));
+      h('span', { class: 'pick-cta' }, icon('plus'), t('Nuovo personaggio'))));
 }
 
 function subtitle(c, sys) {
@@ -98,7 +80,7 @@ function portrait(c, sys) {
 
 function characterCard(c, root) {
   const sys = store.system(c.systemId);
-  const card = h('article', { class: `card card-char${sys?.theme === 'fantasy' ? ' fantasy' : ''}` },
+  const card = h('article', { class: `card card-char${sys?.theme ? ` ${sys.theme}` : ''}` },
     h('a', { href: `#/c/${c.id}`, class: 'card-link' },
       portrait(c, sys),
       h('div', { class: 'card-body' },
@@ -118,43 +100,16 @@ function characterCard(c, root) {
   return card;
 }
 
-function systemRow(s, root) {
-  const used = store.charactersUsing(s.id).length;
-  const builtin = store.isBuiltin(s.id);
-  return h('article', { class: 'sys-row' },
-    h('div', { class: 'sys-info' },
-      h('h3', {}, t(s.name)),
-      h('p', { class: 'card-meta muted' }, used ? t(used === 1 ? '{n} personaggio' : '{n} personaggi', { n: used }) : t('Nessun personaggio'))),
-    h('div', { class: 'sys-actions' },
-      builtin
-        ? btn(t('Nuovo personaggio'), () => newCharacter(s.id), { iconName: 'plus', cls: 'small' })
-        : btn(t('Modifica'), () => { location.hash = `#/t/${s.id}`; }, { iconName: 'edit', cls: 'small' }),
-      menuButton([
-        builtin
-          ? { label: t('Duplica e modifica come modello tuo'), icon: 'copy', onClick: () => { const copy = store.duplicateSystem(s.id); location.hash = `#/t/${copy.id}`; } }
-          : { label: t('Nuovo personaggio con questo modello'), icon: 'plus', onClick: () => newCharacter(s.id) },
-        builtin ? null : { label: t('Duplica'), icon: 'copy', onClick: () => { store.duplicateSystem(s.id); rerender(root); } },
-        { label: t('Esporta (.json)'), icon: 'download', onClick: () => download(`modello-${slugify(s.name)}.json`, store.exportSystem(s.id)) },
-        builtin ? null : { label: t('Elimina'), icon: 'trash', danger: true, onClick: async () => {
-          const msg = used
-            ? t('{n} personaggi usano questo modello e non potranno più essere aperti finché non lo reimporti. Continuare?', { n: used })
-            : t('Il modello "{nome}" verrà eliminato.', { nome: s.name });
-          if (await confirmDialog(t('Eliminare il modello?'), msg, t('Elimina'), true)) { store.deleteSystem(s.id); rerender(root); }
-        } },
-      ], { title: t('Azioni per {nome}', { nome: t(s.name) }) })));
-}
-
 async function newCharacter(preselected) {
   const systems = store.systems();
   const name = h('input', { class: 'input', type: 'text', placeholder: t('es. Elara di Valdombra'), required: true });
-  const ordered = [...systems].sort((a, b) => (b.id === 'dnd5e') - (a.id === 'dnd5e') || store.isBuiltin(b.id) - store.isBuiltin(a.id));
+  const ordered = [...systems].sort((a, b) => (b.id === 'dnd5e') - (a.id === 'dnd5e'));
   let chosen = [preselected, store.setting('lastSystem'), 'dnd5e'].find((id) => id && store.system(id)) || ordered[0].id;
   const choices = h('div', { class: 'choices', role: 'radiogroup', 'aria-label': t('Scheda') });
   const drawChoices = () => choices.replaceChildren(...ordered.map((s) => h('button', {
     type: 'button', class: 'choice', role: 'radio', 'aria-checked': String(s.id === chosen),
     onclick: () => { chosen = s.id; drawChoices(); },
-  }, h('span', { class: 'choice-radio', 'aria-hidden': 'true' }), h('span', { class: 'choice-name' }, t(s.name)),
-  store.isBuiltin(s.id) ? null : h('span', { class: 'choice-tag' }, t('tuo modello')))));
+  }, h('span', { class: 'choice-radio', 'aria-hidden': 'true' }), h('span', { class: 'choice-name' }, t(s.name)))));
   drawChoices();
   const ok = await modal({
     title: t('Nuovo personaggio'),
@@ -181,7 +136,6 @@ async function importFile(root) {
     }
     const parts = [];
     if (r.characters) parts.push(t('{n} personaggi', { n: r.characters }));
-    if (r.systems) parts.push(t('{n} modelli', { n: r.systems }));
     toast(parts.length ? t('Importati: {cosa}', { cosa: parts.join(', ') }) : t('Niente di nuovo da importare'), 'ok');
     if (r.warnings.length) {
       await modal({ title: t('Importazione completata con avvisi'), body: h('ul', {}, r.warnings.map((w) => h('li', {}, w))) });

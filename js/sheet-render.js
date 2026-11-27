@@ -1,5 +1,5 @@
 // Disegna una scheda a partire da un modello e dai valori di un personaggio.
-// Usato sia dalla vista "scheda" sia dall'anteprima dell'editor di modelli.
+// Usato dalla vista "scheda" e dalla stampa.
 import { h, icon, toast, pickFile, readImageResized, modal, confirmDialog, holdRepeat } from './ui.js';
 import { Engine, allFields, defaultValue, weightEnabled, normalizeFeature, normalizeCounter, counterMax, RECHARGE, MAX_USES } from './engine.js';
 import { toNum, formatValue, interpolate } from './formula.js';
@@ -11,7 +11,6 @@ import { openSpellList } from './views/spell-list.js';
 import { t as tr, tValues, toStored, locale } from './i18n.js';
 
 // options.weight: mostra campi e colonne marcati "weight" (peso/ingombro).
-// options.menuFields: mostra nella griglia anche le caselle con "menu" (anteprima editor).
 // options.print: versione da stampare (tutte le tab in fila, tutto aperto, niente vuoti).
 export function renderSheet({ system, values, onChange, options = { weight: true }, initialTab, onTab }) {
   let engine = null;
@@ -30,7 +29,7 @@ export function renderSheet({ system, values, onChange, options = { weight: true
 
   // ---- costruzione dei campi --------------------------------------------
   const showWeight = weightEnabled(options);
-  const ctx = { system, getEngine, set, values, updaters, showWeight, menuFields: !!options.menuFields, print: !!options.print };
+  const ctx = { system, getEngine, set, values, updaters, showWeight, print: !!options.print };
 
   const tabs = [];
   for (const s of system.sections || []) {
@@ -40,7 +39,7 @@ export function renderSheet({ system, values, onChange, options = { weight: true
     tab.sections.push(s);
   }
 
-  const root = h('div', { class: `sheet${system.theme === 'fantasy' ? ' fantasy' : ''}` });
+  const root = h('div', { class: `sheet${system.theme ? ` ${system.theme}` : ''}` });
   const pages = tabs.map((t) => h('div', { class: 'sheet-page', dataset: { tab: t.name } },
     ctx.print && tabs.length > 1 ? h('h2', { class: 'print-tab' }, tr(t.name)) : null,
     t.sections.map((s) => renderSection(s, ctx))));
@@ -69,7 +68,7 @@ function renderSection(s, ctx) {
   const grid = h('div', { class: `grid${s.tiles ? ' tiles' : ''}`, dataset: { cols } });
   for (const f of s.fields || []) {
     if (f.weight && !ctx.showWeight) continue;
-    if (f.menu && f.type === 'checkbox' && !ctx.menuFields) continue; // si attiva dal menu della scheda
+    if (f.menu && f.type === 'checkbox') continue; // si attiva dal menu della scheda
     if (f.hidden) continue; // campo di appoggio per le formule, non si mostra
     try {
       grid.append(renderField(f, ctx, cols, s.tiles, s.customizable ? s.id : null));
@@ -109,6 +108,59 @@ function renderSection(s, ctx) {
     });
   }
   return sec;
+}
+
+// Barra di una risorsa trascinabile (es. i PF): toccando o trascinando, il valore segue il dito
+// (da 0 al massimo). Con i temporanei la barra è lunga massimo + temporanei, come quando si vede.
+// Da tastiera: frecce ±1, Home = 0, Fine = massimo.
+function dragBar(bar, f, ctx, tempVal) {
+  const zone = h('div', { class: 'bar-drag', role: 'slider', tabindex: '0', 'aria-label': tr(f.label) || f.key });
+  zone.append(bar);
+  const nums = () => {
+    const eng = ctx.getEngine();
+    const mx = eng.safe(() => toNum(eng.max(f)));
+    const cur = eng.safe(() => toNum(eng.value(f)));
+    return { max: mx.ok ? Math.max(0, mx.value) : 0, cur: cur.ok ? cur.value : 0 };
+  };
+  const setVal = (v) => {
+    const { max, cur } = nums();
+    const n = Math.max(0, Math.min(max, Math.round(v)));
+    if (n === cur) return;
+    ctx.set(f.key, n >= max ? undefined : n); // al massimo: "pieno"
+  };
+  const fromX = (x) => {
+    const r = bar.getBoundingClientRect();
+    const { max, cur } = nums();
+    const total = tempVal ? Math.max(max, cur) + tempVal() : max;
+    setVal(Math.max(0, Math.min(1, (x - r.left) / (r.width || 1))) * total);
+  };
+  let dragging = false;
+  zone.addEventListener('pointerdown', (e) => {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    dragging = true;
+    zone.classList.add('dragging');
+    try { zone.setPointerCapture(e.pointerId); } catch { /* va bene anche senza */ }
+    fromX(e.clientX);
+  });
+  zone.addEventListener('pointermove', (e) => { if (dragging) fromX(e.clientX); });
+  const end = () => { dragging = false; zone.classList.remove('dragging'); };
+  zone.addEventListener('pointerup', end);
+  zone.addEventListener('pointercancel', end);
+  zone.addEventListener('keydown', (e) => {
+    const { max, cur } = nums();
+    const map = { ArrowLeft: cur - 1, ArrowDown: cur - 1, ArrowRight: cur + 1, ArrowUp: cur + 1, Home: 0, End: max };
+    if (!(e.key in map)) return;
+    e.preventDefault();
+    setVal(map[e.key]);
+  });
+  ctx.updaters.push(() => {
+    const { max, cur } = nums();
+    zone.setAttribute('aria-valuemin', '0');
+    zone.setAttribute('aria-valuemax', String(max));
+    zone.setAttribute('aria-valuenow', String(cur));
+  });
+  return zone;
 }
 
 // valuta una formula qualsiasi (es. il nome di una classe) con i valori della scheda
@@ -159,7 +211,7 @@ function valueDisplay(getter, signed, cls = 'val', manualKey) {
       const manual = manualKey && engine.manual(manualKey) !== undefined;
       el.classList.toggle('err', !r.ok);
       el.classList.toggle('manual', !!manual);
-      el.textContent = r.ok ? (typeof r.value === 'string' ? tValues(r.value) : formatValue(r.value, signed)) : '⚠';
+      el.textContent = r.ok ? (typeof r.value === 'string' ? tValues(tr(r.value)) : formatValue(r.value, signed)) : '⚠';
       el.title = !r.ok ? r.error : manual ? tr('Inserito a mano: tocca per cambiarlo o tornare al calcolo') : manualKey ? tr('Calcolato: tocca per inserirlo a mano') : '';
     },
   };
@@ -247,19 +299,27 @@ const FIELD_RENDERERS = {
 
   skill(f, ctx, wrap) {
     const levels = Math.max(1, Number(f.levels) || 1);
-    const pips = h('button', { type: 'button', class: 'pips', title: tr('Competenza'), onclick: () => {
-      const cur = toNum(raw(f, ctx));
-      ctx.set(f.key, cur >= levels ? 0 : cur + 1);
-    } });
+    // input "number": il livello si scrive (es. Cyberpunk RED, 0–10) invece dei pallini
+    const numeric = f.input === 'number';
+    const top = Number(f.max) || 10;
+    const pips = numeric
+      ? h('input', { type: 'number', class: 'input skill-lvl', min: 0, max: top, inputmode: 'numeric', placeholder: '0', 'aria-label': tr('Livello'),
+        oninput: (e) => { const n = parseNum(e.target.value); ctx.set(f.key, n === '' ? undefined : Math.max(0, Math.min(top, Math.floor(n)))); } })
+      : h('button', { type: 'button', class: 'pips', title: tr('Competenza'), onclick: () => {
+        const cur = toNum(raw(f, ctx));
+        ctx.set(f.key, cur >= levels ? 0 : cur + 1);
+      } });
     const d = valueDisplay(() => ctx.getEngine().value(f), f.signed !== false, 'skill-val', f.key);
     makeEditable(d.el, ctx, { key: f.key, label: String(f.label || f.key).replace(/\s*\([^()]*\)$/, ''), signed: f.signed !== false, auto: (e) => e.value(f) });
     const row = h('div', { class: 'skill-row' });
     ctx.updaters.push(() => {
       const cur = toNum(raw(f, ctx));
-      pips.replaceChildren(...Array.from({ length: levels }, (_, i) => h('span', { class: `pip${i < cur ? ' on' : ''}` })));
-      pips.setAttribute('aria-label', tr('Livello competenza {n} di {tot}', { n: cur, tot: levels }));
+      if (numeric) { if (document.activeElement !== pips) pips.value = cur || ''; } else {
+        pips.replaceChildren(...Array.from({ length: levels }, (_, i) => h('span', { class: `pip${i < cur ? ' on' : ''}` })));
+        pips.setAttribute('aria-label', tr('Livello competenza {n} di {tot}', { n: cur, tot: levels }));
+      }
       d.update(ctx.getEngine());
-      row.dataset.level = String(Math.min(cur, 2));
+      row.dataset.level = numeric ? String(cur > 0 ? 1 : 0) : String(Math.min(cur, 2));
       const n = parseFloat(String(d.el.textContent).replace('−', '-').replace(',', '.'));
       d.el.dataset.sign = n > 0 ? 'pos' : n < 0 ? 'neg' : 'zero';
     });
@@ -336,7 +396,7 @@ const FIELD_RENDERERS = {
         input, max,
         holdRepeat(h('button', { type: 'button', class: 'btn sq hold', 'aria-label': tr('Aumenta') }, '+'), () => step(1)),
         h('button', { type: 'button', class: 'btn ghost sq small', title: tr('Riporta al massimo'), onclick: () => ctx.set(f.key, undefined) }, '↺')),
-      bar));
+      ctx.print ? bar : dragBar(bar, f, ctx, tempKey ? tempVal : null)));
   },
 
   // Tiri contro morte: successi (verdi) e fallimenti (rossi). Con 3 successi il

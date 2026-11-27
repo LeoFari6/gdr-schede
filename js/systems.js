@@ -1,6 +1,5 @@
-// Modelli inclusi nell'app. Sono di sola lettura: per modificarli l'app ne
-// crea una copia. Contengono solo nomi di statistiche e regole di calcolo,
-// nessun testo dei manuali.
+// Schede incluse nell'app (D&D 5e e Cyberpunk RED). Contengono solo nomi di
+// statistiche e regole di calcolo, nessun testo dei manuali.
 
 const DND_STATS = [
   ['for', 'Forza'], ['des', 'Destrezza'], ['cos', 'Costituzione'],
@@ -34,52 +33,6 @@ const inventoryColumns = (weightLabel) => [
   { key: 'peso', label: weightLabel, type: 'number', weight: true, size: 6 },
   { key: 'tot', label: 'Totale', type: 'computed', formula: '@row.qta * @row.peso', weight: true, size: 5.5 },
 ];
-
-export const GENERIC = {
-  id: 'generico',
-  name: 'Generico',
-  description: 'Una scheda neutra: caratteristiche, punti vita, inventario, capacità e note.',
-  builtin: true,
-  version: 2,
-  sections: [
-    {
-      id: 'info', title: 'Personaggio', columns: 4,
-      fields: [
-        { key: 'ritratto', label: 'Ritratto', type: 'image', rowSpan: 2 },
-        { key: 'giocatore', label: 'Giocatore', type: 'text' },
-        { key: 'concetto', label: 'Concetto', type: 'text', placeholder: 'es. Mercenaria disillusa' },
-        { key: 'livello', label: 'Livello', type: 'number', default: 1 },
-      ],
-    },
-    {
-      id: 'car', title: 'Caratteristiche', columns: 6, tiles: true,
-      fields: [
-        ['forza', 'Forza'], ['agilita', 'Agilità'], ['tempra', 'Tempra'],
-        ['mente', 'Mente'], ['istinto', 'Istinto'], ['presenza', 'Presenza'],
-      ].map(([key, label]) => ({ key, label, type: 'number', default: 2 })),
-    },
-    {
-      id: 'stato', title: 'Stato', columns: 3,
-      fields: [
-        { key: 'pf', label: 'Punti vita', type: 'resource', max: '@pf_max', editableMax: true, emphasis: 'primary', span: 2 },
-        { key: 'pf_max', label: 'Punti vita massimi', type: 'number', default: 10, hidden: true },
-        { key: 'fato', label: 'Punti fato', type: 'dots', max: 5, default: 3 },
-      ],
-    },
-    {
-      id: 'inv', title: 'Inventario', columns: 4,
-      fields: [
-        { key: 'inventario', label: 'Oggetti', type: 'list', span: 4, scroll: true, columns: inventoryColumns('Peso') },
-        { key: 'carico', label: 'Carico totale', type: 'computed', formula: 'sum(@inventario.tot)', sub: 'su {@forza * 5} trasportabili', weight: true },
-      ],
-    },
-    featureSection('capacita', 'Capacità e privilegi', undefined, { placeholder: 'Nessuna capacità.' }),
-    {
-      id: 'note', title: 'Note', columns: 1,
-      fields: [{ key: 'note', label: '', type: 'richtext', rows: 6, placeholder: 'Note e storia del personaggio… Tocca per scrivere.' }],
-    },
-  ],
-};
 
 const SCHOOLS = ['', 'Abiurazione', 'Ammaliamento', 'Divinazione', 'Evocazione', 'Illusione', 'Invocazione', 'Necromanzia', 'Trasmutazione'];
 const SLOT_MAX = [4, 3, 3, 3, 3, 2, 2, 1, 1];
@@ -261,6 +214,7 @@ function spellcasting(n) {
 export const DND5E = {
   id: 'dnd5e',
   name: 'D&D 5ª edizione',
+  levelUp: true, // voce "Sali di livello" nel menu della scheda (vedi levelup.js)
   theme: 'fantasy', // titoli e numeri con un carattere graziato
   // Cosa recupera ogni riposo (menu ⋯ della scheda). Gli usi dei privilegi si
   // recuperano in base alla loro ricarica, senza bisogno di regole qui.
@@ -420,4 +374,232 @@ export const DND5E = {
   ],
 };
 
-export const BUILTIN_SYSTEMS = [DND5E, GENERIC];
+// ---- Cyberpunk RED ---------------------------------------------------------
+// Statistiche (chiave, sigla, nome). Le sigle italiane si traducono con quelle ufficiali inglesi.
+const CPR_STATS = [
+  ['int', 'INT', 'Intelligenza'], ['rif', 'RIF', 'Riflessi'], ['des', 'DES', 'Destrezza'],
+  ['tec', 'TEC', 'Tecnica'], ['fre', 'FRE', 'Freddezza'], ['vol', 'VOL', 'Volontà'],
+  ['fort', 'FORT', 'Fortuna'], ['mov', 'MOV', 'Movimento'], ['cor', 'COR', 'Corpo'], ['emp', 'EMP', 'Empatia'],
+];
+const CPR_SHORT = Object.fromEntries(CPR_STATS.map(([k, s]) => [k, s]));
+// Abilità per categoria: [chiave, nome, statistica]
+const CPR_SKILLS = [
+  ['Consapevolezza', [
+    ['concentrazione', 'Concentrazione', 'vol'], ['nascondere', 'Nascondere/Rivelare oggetti', 'int'],
+    ['labbra', 'Leggere le labbra', 'int'], ['percezione', 'Percezione', 'int'], ['tracce', 'Seguire tracce', 'int'],
+  ]],
+  ['Corpo', [
+    ['atletica', 'Atletica', 'des'], ['contorsionismo', 'Contorsionismo', 'des'], ['danza', 'Danza', 'des'],
+    ['resistenza', 'Resistenza', 'vol'], ['torture', 'Resistere a torture/droghe', 'vol'], ['furtivita', 'Furtività', 'des'],
+  ]],
+  ['Controllo', [
+    ['guida', 'Guidare veicoli terrestri', 'rif'], ['pilota_aereo', 'Pilotare veicoli aerei', 'rif'],
+    ['pilota_mare', 'Pilotare veicoli marini', 'rif'], ['cavalcare', 'Cavalcare', 'rif'],
+  ]],
+  ['Istruzione', [
+    ['contabilita', 'Contabilità', 'int'], ['animali', 'Addestrare animali', 'int'], ['burocrazia', 'Burocrazia', 'int'],
+    ['affari', 'Affari', 'int'], ['composizione', 'Composizione', 'int'], ['criminologia', 'Criminologia', 'int'],
+    ['crittografia', 'Crittografia', 'int'], ['deduzione', 'Deduzione', 'int'], ['istruzione', 'Istruzione', 'int'],
+    ['azzardo', 'Gioco d\'azzardo', 'int'], ['slang', 'Lingua (Slang di strada)', 'int'], ['lingua', 'Lingua (altra)', 'int'],
+    ['biblioteca', 'Ricerca in biblioteca', 'int'], ['locale', 'Esperto locale', 'int'], ['scienza', 'Scienza', 'int'],
+    ['tattica', 'Tattica', 'int'], ['sopravvivenza', 'Sopravvivenza nelle terre selvagge', 'int'],
+  ]],
+  ['Combattimento', [
+    ['rissa', 'Rissa', 'des'], ['schivare', 'Schivare', 'des'], ['arti_marziali', 'Arti marziali', 'des'], ['mischia', 'Armi da mischia', 'des'],
+  ]],
+  ['Spettacolo', [
+    ['recitazione', 'Recitazione', 'fre'], ['strumento', 'Suonare uno strumento', 'tec'],
+  ]],
+  ['Armi a distanza', [
+    ['arco', 'Tiro con l\'arco', 'rif'], ['automatico', 'Fuoco automatico', 'rif'], ['pistole', 'Pistole', 'rif'],
+    ['pesanti', 'Armi pesanti', 'rif'], ['spalla', 'Armi a spalla', 'rif'],
+  ]],
+  ['Sociali', [
+    ['corruzione', 'Corruzione', 'fre'], ['conversazione', 'Conversazione', 'emp'], ['percezione_umana', 'Percezione umana', 'emp'],
+    ['interrogatorio', 'Interrogatorio', 'fre'], ['persuasione', 'Persuasione', 'fre'], ['aspetto', 'Cura dell\'aspetto', 'fre'],
+    ['strada', 'Conoscenza della strada', 'fre'], ['commercio', 'Commercio', 'fre'], ['stile', 'Guardaroba e stile', 'fre'],
+  ]],
+  ['Tecniche', [
+    ['tec_aerei', 'Tecnologia veicoli aerei', 'tec'], ['tec_base', 'Tecnologia di base', 'tec'], ['cibertec', 'Cibertecnologia', 'tec'],
+    ['demolizioni', 'Demolizioni', 'tec'], ['elettronica', 'Elettronica/Sicurezza', 'tec'], ['pronto_soccorso', 'Pronto soccorso', 'tec'],
+    ['falsificazione', 'Falsificazione', 'tec'], ['tec_terra', 'Tecnologia veicoli terrestri', 'tec'], ['arte', 'Pittura/Disegno/Scultura', 'tec'],
+    ['paramedico', 'Paramedico', 'tec'], ['foto', 'Fotografia/Film', 'tec'], ['scassinare', 'Scassinare', 'tec'],
+    ['borseggiare', 'Borseggiare', 'tec'], ['tec_mare', 'Tecnologia veicoli marini', 'tec'], ['armaiolo', 'Armaiolo', 'tec'],
+  ]],
+];
+const CPR_ROLES = ['Rockerboy', 'Solo', 'Netrunner', 'Tech', 'Medtech', 'Media', 'Exec', 'Lawman', 'Fixer', 'Nomad'];
+// Abilità di ruolo per ruolo
+const CPR_ROLE_ABILITY = {
+  Rockerboy: 'Impatto carismatico', Solo: 'Consapevolezza in combattimento', Netrunner: 'Interfaccia', Tech: 'Inventore',
+  Medtech: 'Medicina', Media: 'Credibilità', Exec: 'Lavoro di squadra', Lawman: 'Rinforzi', Fixer: 'Operatore', Nomad: 'Moto',
+};
+const roleAbility = Object.entries(CPR_ROLE_ABILITY).reduceRight((rest, [r, a]) => `if(@ruolo == "${r}", "${a}", ${rest})`, '""');
+// abilità d'arma: nome mostrato nella lista delle armi → chiave del campo abilità
+const CPR_WEAPON_SKILLS = [['Pistole', 'pistole'], ['Armi a spalla', 'spalla'], ['Armi pesanti', 'pesanti'], ['Fuoco automatico', 'automatico'],
+  ['Tiro con l\'arco', 'arco'], ['Armi da mischia', 'mischia'], ['Arti marziali', 'arti_marziali'], ['Rissa', 'rissa']];
+const weaponRoll = CPR_WEAPON_SKILLS.reduceRight((rest, [l, k]) => `if(@row.abilita == "${l.replace(/'/g, "\\'")}", @${k}, ${rest})`, '0');
+
+export const CYBERPUNK_RED = {
+  id: 'cyberpunk-red',
+  name: 'Cyberpunk RED',
+  description: 'Statistiche, abilità, punti ferita, umanità, armi, armatura, cyberware e lifepath.',
+  builtin: true,
+  version: 1,
+  theme: 'cyber',
+  sections: [
+    // ---- tab Principale ----
+    {
+      id: 'info', title: 'Edgerunner', tab: 'Principale', columns: 4,
+      fields: [
+        { key: 'ritratto', label: 'Ritratto', type: 'image', rowSpan: 2 },
+        { key: 'ruolo', label: 'Ruolo', type: 'text', suggestions: CPR_ROLES, placeholder: 'Scegli o scrivi' },
+        { key: 'ruolo_abilita', label: 'Abilità di ruolo', type: 'computed', formula: roleAbility, showIf: '@ruolo != ""' },
+        { key: 'rango', label: 'Rango', type: 'number', default: 4 },
+        { key: 'reputazione', label: 'Reputazione', type: 'number' },
+        { key: 'pm', label: 'Punti miglioramento', type: 'number' },
+        { key: 'eddies', label: 'Eurodollari (eb)', type: 'number' },
+      ],
+    },
+    {
+      id: 'stat', title: 'Statistiche', tab: 'Principale', columns: 5, tiles: true,
+      fields: CPR_STATS.map(([key, short, name]) => ({ key, label: short, type: 'number', default: 5, sub: name })),
+    },
+    {
+      id: 'salute', title: 'Salute', tab: 'Principale', columns: 3,
+      fields: [
+        // PF massimi = 10 + 5 × (media di COR e VOL, per eccesso)
+        { key: 'pf', label: 'Punti ferita', type: 'resource', max: '10 + 5 * ceil((@cor + @vol) / 2)', span: 2, emphasis: 'primary' },
+        {
+          key: 'condizione', label: 'Condizione', type: 'computed', tile: true,
+          formula: 'if(@pf <= 0, "Morente", if(@pf < ceil(@pf_max / 2), "Gravemente ferito", if(@pf < @pf_max, "Leggermente ferito", "Illeso")))',
+          sub: '{if(@pf <= 0, "−4 alle azioni, −6 MOV", if(@pf < ceil(@pf_max / 2), "−2 alle azioni", concat("gravemente ferito sotto ", ceil(@pf_max / 2))))}',
+        },
+        { key: 'umanita', label: 'Umanità', type: 'resource', max: '@emp * 10', span: 2 },
+        { key: 'emp_att', label: 'EMP attuale', type: 'computed', formula: 'floor(@umanita / 10)', tile: true, sub: 'Umanità ÷ 10' },
+        { key: 'ts_morte', label: 'Tiro salvezza contro morte', type: 'computed', formula: '@cor', tile: true, sub: 'penalità +{@pen_morte}' },
+        { key: 'pen_morte', label: 'Penalità ai tiri contro morte', type: 'number' },
+        { key: 'fortuna', label: 'Punti fortuna', type: 'resource', max: '@fort', emphasis: 'compact' },
+      ],
+    },
+    {
+      id: 'combattimento', title: 'Combattimento', tab: 'Principale', columns: 4,
+      fields: [
+        { key: 'iniziativa', label: 'Iniziativa', type: 'computed', formula: '@rif', sub: 'RIF + 1d10', tile: true },
+        { key: 'movimento', label: 'Movimento', type: 'computed', formula: '@mov * 2', sub: 'metri per azione', tile: true },
+        { key: 'sp_testa', label: 'SP testa', type: 'resource', max: '@sp_testa_max', editableMax: true, emphasis: 'compact' },
+        { key: 'sp_testa_max', label: 'SP testa massima', type: 'number', default: 0, hidden: true },
+        { key: 'sp_corpo', label: 'SP corpo', type: 'resource', max: '@sp_corpo_max', editableMax: true, emphasis: 'compact' },
+        { key: 'sp_corpo_max', label: 'SP corpo massima', type: 'number', default: 0, hidden: true },
+      ],
+    },
+    {
+      id: 'armi', title: 'Armi', tab: 'Principale', columns: 1,
+      fields: [{
+        key: 'armi', label: '', type: 'list', scroll: true, columns: [
+          { key: 'arma', label: 'Arma', type: 'text', width: 3, emoji: 'icona' },
+          { key: 'abilita', label: 'Abilità', type: 'select', options: ['', ...CPR_WEAPON_SKILLS.map(([l]) => l)], width: 2 },
+          { key: 'tiro', label: 'Tiro', type: 'computed', formula: weaponRoll, size: 4 },
+          { key: 'danni', label: 'Danni', type: 'text', size: 5 },
+          { key: 'rof', label: 'CdF', type: 'number', size: 3.6 },
+          { key: 'munizioni', label: 'Munizioni', type: 'text', size: 6 },
+          { key: 'note', label: 'Note', type: 'notes' },
+        ],
+      }],
+    },
+    {
+      id: 'ferite', title: 'Ferite critiche', tab: 'Principale', columns: 1,
+      fields: [{
+        key: 'ferite', label: '', type: 'list', columns: [
+          { key: 'ferita', label: 'Ferita', type: 'text', width: 2 },
+          { key: 'effetto', label: 'Effetto', type: 'text', width: 3 },
+          { key: 'note', label: 'Note', type: 'notes' },
+        ],
+      }],
+    },
+    // ---- tab Abilità ----
+    ...CPR_SKILLS.map(([cat, skills], i) => ({
+      id: `ab_${i}`, title: cat, tab: 'Abilità', columns: 3,
+      fields: skills.map(([key, label, stat]) => ({
+        key, label: `${label} (${CPR_SHORT[stat]})`, type: 'skill', input: 'number', max: 10, signed: false, formula: `@${stat} + @this`,
+      })),
+    })),
+    // ---- tab Equipaggiamento ----
+    {
+      id: 'cyberware', title: 'Cyberware', tab: 'Equipaggiamento', columns: 4,
+      fields: [
+        {
+          key: 'cyberware', label: '', type: 'list', span: 4, scroll: true, columns: [
+            { key: 'nome', label: 'Cyberware', type: 'text', width: 3, emoji: 'icona' },
+            { key: 'posizione', label: 'Posizione', type: 'text', width: 2 },
+            { key: 'um', label: 'Perdita', title: 'Perdita di umanità', type: 'number', size: 5.5 },
+            { key: 'note', label: 'Note', type: 'notes' },
+          ],
+        },
+        { key: 'um_persa', label: 'Umanità persa con il cyberware', type: 'computed', formula: 'sum(@cyberware.um)', span: 2 },
+      ],
+    },
+    {
+      id: 'equip', title: 'Equipaggiamento', tab: 'Equipaggiamento', columns: 1,
+      fields: [{
+        key: 'equipaggiamento', label: '', type: 'list', scroll: true, columns: [
+          { key: 'oggetto', label: 'Oggetto', type: 'text', width: 3, emoji: 'icona' },
+          { key: 'note', label: 'Note', type: 'notes' },
+          { key: 'qta', label: 'Qtà', type: 'number', size: 4.2 },
+        ],
+      }],
+    },
+    {
+      id: 'net', title: 'Netrunning', tab: 'Equipaggiamento', columns: 3, showIf: '@ruolo == "Netrunner"',
+      fields: [
+        { key: 'cyberdeck', label: 'Cyberdeck', type: 'text', span: 2 },
+        { key: 'slot_deck', label: 'Slot', type: 'number', default: 7 },
+        {
+          key: 'programmi', label: 'Programmi', type: 'list', span: 3, scroll: true, columns: [
+            { key: 'nome', label: 'Programma', type: 'text', width: 3 },
+            { key: 'classe', label: 'Classe', type: 'text', width: 2 },
+            { key: 'atk', label: 'ATK', type: 'number', size: 3.6 },
+            { key: 'def', label: 'DEF', type: 'number', size: 3.6 },
+            { key: 'rez', label: 'REZ', type: 'number', size: 3.6 },
+            { key: 'note', label: 'Note', type: 'notes' },
+          ],
+        },
+      ],
+    },
+    // ---- tab Storia (lifepath) ----
+    {
+      id: 'lifepath', title: 'Lifepath', tab: 'Storia', columns: 2,
+      fields: [
+        ['origine', 'Origine culturale'], ['personalita', 'Personalità'], ['abbigliamento', 'Stile di abbigliamento'],
+        ['capelli', 'Acconciatura'], ['vezzo', 'Vezzo da cui non ti separi mai'], ['valori', 'Cosa conta di più per te'],
+        ['persone', 'Cosa pensi della gente'], ['persona', 'La persona più importante'], ['oggetto_caro', 'Il tuo oggetto più caro'],
+        ['famiglia', 'Origini familiari'], ['infanzia', 'Ambiente dell\'infanzia'], ['crisi', 'Crisi familiare'],
+      ].map(([key, label]) => ({ key, label, type: 'text', span: 1 })),
+    },
+    {
+      id: 'relazioni', title: 'Amici, nemici e amori', tab: 'Storia', columns: 3,
+      fields: [
+        { key: 'amici', label: 'Amici', type: 'richtext', rows: 3 },
+        { key: 'nemici', label: 'Nemici', type: 'richtext', rows: 3 },
+        { key: 'amori', label: 'Amori tragici', type: 'richtext', rows: 3 },
+      ],
+    },
+    {
+      id: 'obiettivi', title: 'Obiettivi e storia', tab: 'Storia', columns: 1,
+      fields: [
+        { key: 'obiettivi', label: 'Obiettivi di vita', type: 'richtext', rows: 3 },
+        { key: 'biografia', label: 'Storia del personaggio', type: 'richtext', rows: 6, placeholder: 'Da dove viene, cosa ha vissuto, cosa cerca… Tocca per scrivere.' },
+      ],
+    },
+    // ---- tab Note ----
+    {
+      id: 'appunti', title: 'Appunti', tab: 'Note', columns: 1,
+      fields: [{ key: 'schede_note', label: '', type: 'features', variant: 'notebook', placeholder: 'Nessuna scheda. Creane una per ogni argomento: PNG, luoghi, indizi, tabelle…', textPlaceholder: 'Nomi, indizi, cose da ricordare… Tocca per scrivere.' }],
+    },
+    {
+      id: 'diario', title: 'Diario delle sessioni', tab: 'Note', columns: 1,
+      fields: [{ key: 'diario', label: '', type: 'features', variant: 'journal', placeholder: 'Nessuna sessione annotata. Le nuove voci compaiono in cima.' }],
+    },
+  ],
+};
+
+export const BUILTIN_SYSTEMS = [DND5E, CYBERPUNK_RED];

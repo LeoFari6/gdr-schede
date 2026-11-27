@@ -142,7 +142,7 @@ test('D&D 5e: multiclasse', () => {
 
 test('peso: campi marcati e nessun tiro nei modelli inclusi', () => {
   for (const sys of BUILTIN_SYSTEMS) {
-    assert.ok(hasWeight(sys), sys.name);
+    if (sys.id === 'dnd5e') assert.ok(hasWeight(sys), sys.name); // Cyberpunk RED non usa il peso
     const json = JSON.stringify(sys);
     assert.ok(!/"(roll|rowRoll|targetMode)"|"dice"/.test(json), `tiri rimasti in ${sys.name}`);
   }
@@ -489,4 +489,145 @@ test('slot incantesimo: numero cambiato a mano', () => {
   const f2 = sec.fields.find((f) => f.key === 'slot_2');
   assert.equal(e.visible(f2.showIf), true);
   assert.equal(new Engine(dnd, { classe: 'Mago', livello: 1 }).visible(f2.showIf), false);
+});
+
+test('Cyberpunk RED: punti ferita, abilità, umanità e armi', () => {
+  const cpr = BUILTIN_SYSTEMS.find((s) => s.id === 'cyberpunk-red');
+  assert.ok(cpr, 'scheda inclusa');
+  assert.equal(BUILTIN_SYSTEMS.some((s) => s.id === 'generico'), false);
+  const get = (v, k) => new Engine(cpr, v).resolve(k);
+  const base = { cor: 6, vol: 7, rif: 8, int: 5, emp: 6, fort: 4 };
+  assert.equal(get(base, 'pf_max'), 10 + 5 * 7); // 10 + 5 × ceil((6+7)/2)
+  assert.equal(get(base, 'pf'), 45);
+  assert.equal(get({ ...base, pf: 30 }, 'condizione'), 'Leggermente ferito');
+  assert.equal(get({ ...base, pf: 22 }, 'condizione'), 'Gravemente ferito');
+  assert.equal(get({ ...base, pf: 0 }, 'condizione'), 'Morente');
+  assert.equal(get({ ...base, percezione: 4 }, 'percezione'), 9); // INT + livello
+  assert.equal(get({ ...base, pistole: 6 }, 'pistole'), 14);
+  assert.equal(get(base, 'umanita'), 60);
+  assert.equal(get({ ...base, umanita: 47 }, 'emp_att'), 4);
+  assert.equal(get({ ...base, ruolo: 'Solo' }, 'ruolo_abilita'), 'Consapevolezza in combattimento');
+  const e = new Engine(cpr, { ...base, pistole: 6 });
+  const armi = cpr.sections.flatMap((s) => s.fields).find((f) => f.key === 'armi');
+  assert.equal(e.rowValue(armi, { arma: 'Pistola pesante', abilita: 'Pistole' }, 'tiro'), 14);
+  assert.deepEqual(validateSystem(cpr), []);
+});
+
+test('sali di livello (D&D): livello, PF, competenza, slot e multiclasse', async () => {
+  globalThis.document ??= { addEventListener() {} }; // ui.js aggancia un evento al caricamento
+  const { planLevelUp } = await import('../js/levelup.js');
+  const dnd = BUILTIN_SYSTEMS.find((s) => s.id === 'dnd5e');
+  // Mago 4 → 5: +1 competenza, d6 (4) + COS +2 = +6 PF, sblocca gli incantesimi di 3° livello
+  const p = planLevelUp(dnd, { classe: 'Mago', livello: 4, cos: 14, pf_max: 22, pf: 15 }, 1);
+  assert.equal(p.changes.livello, 5);
+  assert.equal(p.changes.pf_max, 28);
+  assert.equal(p.changes.pf, 21);
+  assert.equal(p.known, true);
+  const labels = p.items.map((i) => i.label || i.note);
+  assert.ok(labels.includes('Bonus competenza'));
+  assert.ok(p.items.some((i) => i.note && /3°/.test(i.note)));
+  // PF al massimo (non salvati): resta al massimo
+  assert.equal('pf' in planLevelUp(dnd, { classe: 'Mago', livello: 1, pf_max: 8 }, 1).changes, false);
+  // multiclasse: sale solo la seconda classe
+  const m = planLevelUp(dnd, { classe: 'Guerriero', livello: 5, multiclasse: true, classe_2: 'Ladro', livello_2: 2, pf_max: 50 }, 2);
+  assert.deepEqual(Object.keys(m.changes).sort(), ['_livelli', 'livello_2', 'pf_max']);
+  assert.equal(m.changes.livello_2, 3);
+  assert.equal(m.total, 8);
+  // classe personalizzata: sale di livello ma senza riepilogo
+  assert.equal(planLevelUp(dnd, { classe: 'Lama Cinerea', livello: 3 }, 1).known, false);
+  // livello 20: fermo
+  assert.equal(planLevelUp(dnd, { classe: 'Mago', livello: 20 }, 1).error, 'max');
+});
+
+test('scendi di livello e PF col tiro del dado (D&D)', async () => {
+  globalThis.document ??= { addEventListener() {} };
+  const { planLevelUp, planLevelDown, hpToRemove } = await import('../js/levelup.js');
+  const dnd = BUILTIN_SYSTEMS.find((s) => s.id === 'dnd5e');
+  // tiro: d10 = 3, COS +2 → +5 PF (non la media di 8)
+  const v = { classe: 'Guerriero', livello: 3, cos: 14, pf_max: 30 };
+  const up = planLevelUp(dnd, v, 1, 5);
+  assert.equal(up.changes.pf_max, 35);
+  assert.deepEqual(up.changes._livelli, [{ c: 1, pf: 5 }]);
+  // scendendo si tolgono proprio quei 5 PF
+  const after = { ...v, ...up.changes };
+  assert.deepEqual(hpToRemove(dnd, after, 1), { hp: 5, known: true });
+  const down = planLevelDown(dnd, after, 1);
+  assert.equal(down.changes.livello, 3);
+  assert.equal(down.changes.pf_max, 30);
+  assert.equal(down.changes._livelli, undefined);
+  // senza storico: la media (d10 → 6 + 2 = 8)
+  assert.deepEqual(hpToRemove(dnd, v, 1), { hp: 8, known: false });
+  // PF attuali non oltre il nuovo massimo; al livello 1 non si scende
+  assert.equal(planLevelDown(dnd, { ...v, pf: 30 }, 1, 8).changes.pf, 22);
+  assert.equal(planLevelDown(dnd, { classe: 'Mago', livello: 1 }, 1).error, 'min');
+  // slot persi scendendo (Mago 5 → 4: niente più slot di 3° livello)
+  const md = planLevelDown(dnd, { classe: 'Mago', livello: 5, pf_max: 28 }, 1);
+  assert.ok(md.items.some((i) => /3°/.test(i.label) && i.to === 0));
+});
+
+test('riepilogo dei riposi: cosa si recupera, prima e dopo', async () => {
+  globalThis.document ??= { addEventListener() {} };
+  const { describeRest } = await import('../js/rest.js');
+  const dnd = BUILTIN_SYSTEMS.find((s) => s.id === 'dnd5e');
+  const v = { classe: 'Mago', livello: 3, pf_max: 20, pf: 7, pf_temp: 4, dv: 1, slot_1: 3, slot_2: 1,
+    privilegi_classe: [{ nome: 'Recupero arcano', usi: 1, usati: 1, ricarica: 'Riposo lungo' }] };
+  const { changes } = applyRest(dnd, v, 'lungo');
+  const items = describeRest(dnd, v, changes);
+  const row = (re) => items.find((i) => re.test(i.label));
+  assert.deepEqual([row(/^Punti ferita/).from, row(/^Punti ferita/).to], [7, 20]);
+  assert.deepEqual([row(/temporanei/).from, row(/temporanei/).to], [4, 0]);
+  assert.deepEqual([row(/^Dadi vita/).from, row(/^Dadi vita/).to], [1, 3]);
+  assert.deepEqual([row(/^Slot di 1/).from, row(/^Slot di 1/).to], [1, 4]); // 4 slot, 3 usati → 1 disponibile
+  assert.deepEqual([row(/Recupero arcano/).from, row(/Recupero arcano/).to], [0, 1]);
+  // riposo breve di un Mago: niente da recuperare
+  assert.deepEqual(describeRest(dnd, v, applyRest(dnd, v, 'breve').changes), []);
+});
+
+test('riposo breve: dadi vita spesi per recuperare PF', async () => {
+  globalThis.document ??= { addEventListener() {} };
+  const { hitDicePools, spendHitDice } = await import('../js/rest.js');
+  const dnd = BUILTIN_SYSTEMS.find((s) => s.id === 'dnd5e');
+  const v = { classe: 'Guerriero', livello: 5, multiclasse: true, classe_2: 'Mago', livello_2: 2, cos: 14, pf_max: 50, pf: 20, dv: 3 };
+  const info = hitDicePools(dnd, v);
+  assert.deepEqual(info.pools.map((p) => [p.key, p.die, p.left]), [['dv', 10, 3], ['dv_2', 6, 2]]);
+  assert.equal(info.con, 2);
+  // 2 d10 (tiro 11) + 1 d6 (tiro 4): 11 + 4 + 3 × 2 = 21 PF
+  const r = spendHitDice(dnd, v, [{ key: 'dv', n: 2, roll: 11 }, { key: 'dv_2', n: 1, roll: 4 }]);
+  assert.equal(r.heal, 21);
+  assert.deepEqual(r.changes, { dv: 1, dv_2: 1, pf: 41 });
+  // non si supera il massimo (e allora i PF tornano "pieni")
+  const full = spendHitDice(dnd, { ...v, pf: 45 }, [{ key: 'dv', n: 3, roll: 25 }]);
+  assert.equal(full.heal, 5);
+  assert.equal(full.changes.pf, undefined);
+  // non si spendono più dadi di quelli rimasti
+  assert.equal(spendHitDice(dnd, v, [{ key: 'dv', n: 9, roll: 30 }]).changes.dv, 0);
+});
+
+test('tiro di dadi: risultati nel dado giusto, quantità limitata, modificatore', async () => {
+  globalThis.document ??= { addEventListener() {} };
+  const { roll, rollDie, MAX_DICE, DICE } = await import('../js/dice.js');
+  for (const d of DICE) {
+    const seen = new Set();
+    for (let i = 0; i < 4000; i++) { const v = rollDie(d); assert.ok(v >= 1 && v <= d, `d${d}: ${v}`); seen.add(v); }
+    if (d <= 20) assert.equal(seen.size, d, `d${d}: escono tutte le facce`);
+  }
+  const r = roll(6, 99, 3);
+  assert.equal(r.rolls.length, MAX_DICE);
+  assert.equal(r.total, r.rolls.reduce((a, b) => a + b, 0) + 3);
+  assert.equal(roll(20, 0).rolls.length, 1);
+});
+
+test('tiro di dadi diversi insieme (max 20 in tutto)', async () => {
+  globalThis.document ??= { addEventListener() {} };
+  const { normalizePool, poolFormula, rollPool, MAX_DICE } = await import('../js/dice.js');
+  assert.deepEqual(normalizePool([{ sides: 6, count: 1 }, { sides: 20, count: 2 }, { sides: 6, count: 2 }, { sides: 7, count: 3 }, { sides: 8, count: 0 }]),
+    [{ sides: 20, count: 2 }, { sides: 6, count: 3 }]);
+  assert.equal(poolFormula([{ sides: 20, count: 2 }, { sides: 6, count: 1 }], 3), '2d20 + 1d6 + 3');
+  assert.equal(poolFormula([{ sides: 8, count: 1 }], -2), '1d8 − 2');
+  const capped = normalizePool([{ sides: 20, count: 15 }, { sides: 6, count: 15 }]);
+  assert.equal(capped.reduce((a, g) => a + g.count, 0), MAX_DICE);
+  const r = rollPool([{ sides: 20, count: 2 }, { sides: 4, count: 3 }], 1);
+  assert.equal(r.dice.length, 5);
+  assert.ok(r.dice.every((d) => d.v >= 1 && d.v <= d.sides));
+  assert.equal(r.total, r.dice.reduce((a, d) => a + d.v, 0) + 1);
 });

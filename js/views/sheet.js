@@ -2,11 +2,14 @@ import { h, icon, toast, confirmDialog, download, menuButton, slugify } from '..
 import { store } from '../store.js';
 import { hasWeight, weightEnabled, allFields, applyRest } from '../engine.js';
 import { renderSheet } from '../sheet-render.js';
-import { themeToggle, applyAccent, pickAccent } from '../theme.js';
+import { toggleTheme, applyAccent, pickAccent } from '../theme.js';
 import { openSpellList } from './spell-list.js';
 import { withImages } from '../images.js';
 import { openImageViewer } from '../richtext.js';
 import { t } from '../i18n.js';
+import { runLevelUp, runLevelDown } from '../levelup.js';
+import { showRestRecap, askHitDice } from '../rest.js';
+import { openDiceRoller } from '../dice.js';
 
 // Tab aperta per ogni personaggio, per ritrovarla dopo un ridisegno.
 const lastTab = new Map();
@@ -19,7 +22,7 @@ let printTarget = null; // { sys, id } del personaggio aperto
 // Costruisce la versione da stampare di un personaggio (usata da buildPrint).
 export function makePrintRoot({ sys, name, values, options = {} }) {
   const sheet = renderSheet({ system: sys, values: structuredClone(values), options: { ...options, print: true } });
-  const root = h('div', { id: 'print-root', class: sys.theme === 'fantasy' ? 'fantasy' : '' },
+  const root = h('div', { id: 'print-root', class: sys.theme || '' },
     h('header', { class: 'print-head' }, h('h1', {}, name), h('p', {}, t(sys.name))),
     sheet.el);
   root.querySelectorAll('.rt-editor, .list-tools').forEach((e) => e.remove()); // parti solo per modificare
@@ -131,15 +134,20 @@ export function renderCharacter(root, id) {
   };
   // Riposi: applicano le regole del modello (es. slot del Warlock col riposo
   // breve, PF e slot col lungo) e recuperano gli usi dei privilegi.
-  const canRest = !!sys.rests || allFields(sys).some((f) => f.type === 'features');
+  const canRest = !!sys.rests || allFields(sys).some((f) => f.type === 'features' && !f.variant); // diario e appunti non hanno usi
   // elenco incantesimi: solo nelle schede che lo usano (D&D)
   const usesSpellList = allFields(sys).some((f) => (f.columns || []).some((c) => c.lookup?.source === 'incantesimi'));
-  const rest = (name, kind) => {
-    const { changes, labels } = applyRest(sys, c.values, kind);
+  // riposo: applica le modifiche, aggiorna la scheda e mostra il riepilogo di cosa è stato recuperato
+  const rest = async (kind) => {
+    const before = structuredClone(store.character(c.id).values);
+    // riposo breve: prima si possono spendere dadi vita per recuperare PF
+    const dice = kind === 'breve' ? await askHitDice(sys, before) : {};
+    if (dice === null) return; // annullato
+    const changes = { ...applyRest(sys, before, kind).changes, ...dice };
     const keys = Object.keys(changes);
     keys.forEach((k) => store.setValue(c.id, k, changes[k]));
-    toast(labels.length ? t('{riposo}: recuperati {cosa}', { riposo: name, cosa: labels.map((l) => t(l)).join(', ') }) : t('{riposo}: niente da recuperare', { riposo: name }), labels.length ? 'ok' : 'info', 3500);
     if (keys.length) redraw();
+    showRestRecap(sys, before, changes, kind);
   };
 
   // Caselle del modello che si attivano dal menu (es. multiclasse).
@@ -152,22 +160,28 @@ export function renderCharacter(root, id) {
     };
   });
 
-  const header = h('header', { class: `topbar sheet-top${sys.theme === 'fantasy' ? ' fantasy' : ''}` },
+  const header = h('header', { class: `topbar sheet-top${sys.theme ? ` ${sys.theme}` : ''}` },
     h('a', { href: '#/', class: 'btn ghost sq', 'aria-label': t('Indietro'), title: t('Tutti i personaggi') }, icon('back')),
     h('div', { class: 'title-wrap' }, portrait, nameInput, h('span', { class: 'chip' }, t(sys.name))),
     h('div', { class: 'topbar-actions' },
-      h('button', { type: 'button', class: 'btn ghost sq', title: t('Colore della scheda'), 'aria-label': t('Colore della scheda'), onclick: chooseColor }, icon('palette')),
-      themeToggle(),
+      h('button', { type: 'button', class: 'btn ghost sq', title: t('Tira i dadi'), 'aria-label': t('Tira i dadi'), onclick: () => openDiceRoller() }, icon('dice')),
       menuButton([
-        canRest ? { label: t('Riposo breve'), icon: 'sun', onClick: () => rest(t('Riposo breve'), 'breve') } : null,
-        canRest ? { label: t('Riposo lungo'), icon: 'moon', onClick: () => rest(t('Riposo lungo'), 'lungo') } : null,
+        sys.levelUp ? { label: t('Sali di livello'), icon: 'up', onClick: async () => {
+          const r = await runLevelUp(sys, store.character(c.id).values, (k, v) => store.setValue(c.id, k, v), redraw);
+          if (r?.homebrew) toast(t('Livello {n} (+{pf} PF massimi). Classe personalizzata: il resto aggiornalo a mano.', { n: r.level, pf: r.hp }), 'ok', 4500);
+        } } : null,
+        sys.levelUp ? { label: t('Scendi di livello'), icon: 'down', onClick: () => runLevelDown(sys, store.character(c.id).values, (k, v) => store.setValue(c.id, k, v), redraw) } : null,
+        canRest ? { label: t('Riposo breve'), icon: 'sun', onClick: () => rest('breve') } : null,
+        canRest ? { label: t('Riposo lungo'), icon: 'moon', onClick: () => rest('lungo') } : null,
         usesSpellList ? { label: t('Elenco incantesimi'), icon: 'book', onClick: openSpellList } : null,
         ...menuToggles,
         hasWeight(sys) ? { label: weightOn ? t('Disattiva peso e ingombro') : t('Attiva peso e ingombro'), icon: 'weight', onClick: toggleWeight } : null,
+        // colore secondario e tema chiaro/scuro stanno nel menu, così la barra resta libera per il nome
+        { label: t('Colore della scheda'), icon: 'palette', onClick: chooseColor },
+        { label: document.documentElement.dataset.theme === 'dark' ? t('Tema chiaro') : t('Tema scuro'), icon: document.documentElement.dataset.theme === 'dark' ? 'sun' : 'moon', onClick: () => { toggleTheme(); redraw(); } },
         { label: t('Esporta (.json)'), icon: 'download', onClick: async () => { download(`${slugify(c.name)}.json`, await withImages(store.exportCharacter(c.id))); toast(t('Scheda esportata')); } },
         { label: t('Stampa / PDF'), icon: 'print', onClick: () => { buildPrint(); window.print(); } },
         { label: t('Duplica'), icon: 'copy', onClick: () => { const d = store.duplicateCharacter(c.id); location.hash = `#/c/${d.id}`; } },
-        store.isBuiltin(sys.id) ? null : { label: t('Modifica modello'), icon: 'edit', onClick: () => { location.hash = `#/t/${sys.id}`; } },
         { label: t('Elimina'), icon: 'trash', danger: true, onClick: async () => {
           if (await confirmDialog(t('Eliminare il personaggio?'), t('"{nome}" verrà eliminato da questo dispositivo.', { nome: c.name }), t('Elimina'), true)) {
             store.deleteCharacter(c.id); location.hash = '#/';
