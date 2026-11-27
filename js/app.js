@@ -4,6 +4,9 @@ import { applyTheme, applyAccent } from './theme.js';
 import { renderHome } from './views/home.js';
 import { renderCharacter } from './views/sheet.js';
 import { renderEditor } from './views/editor.js';
+import { t, lang } from './i18n.js';
+
+document.documentElement.lang = lang;
 
 const root = document.getElementById('app');
 applyTheme();
@@ -16,8 +19,8 @@ function route() {
   store.flush();
   const parts = (location.hash.replace(/^#\/?/, '') || '').split('/').filter(Boolean);
   root.replaceChildren();
-  document.querySelectorAll('dialog, .suggest, .death, .viewer').forEach((d) => d.remove());
-  document.title = 'Schede GdR';
+  document.querySelectorAll('dialog, .suggest, .death, .viewer, .emoji-pop').forEach((d) => d.remove());
+  document.title = t('Schede GdR');
   applyAccent(document.documentElement, null);
   window.scrollTo(0, 0);
   if (parts[0] === 'c' && parts[1]) renderCharacter(root, decodeURIComponent(parts[1]));

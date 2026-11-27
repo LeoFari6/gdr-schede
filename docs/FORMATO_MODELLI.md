@@ -53,6 +53,7 @@ Gli usi e i contatori dei privilegi si recuperano da soli in base alla loro rica
 | `columns` | Colonne della griglia, da 1 a 9 (su telefono diventano 2–3) |
 | `tiles` | `true`: tutti i campi della sezione diventano tessere (valore grande e centrato) |
 | `customizable` | `true`: il giocatore può rinominare e nascondere i campi della sezione (pulsante ⚙) |
+| `editMax` | testo del pulsante (es. `"Numero di slot"`) che permette al giocatore di cambiare a mano il massimo dei campi a pallini della sezione; vuoto = automatico |
 | `fields` | Elenco dei campi |
 | `showIf` | Formula: la sezione è visibile solo se il risultato è vero (es. `@multiclasse`). Facoltativo |
 
@@ -77,7 +78,7 @@ Gli usi e i contatori dei privilegi si recuperano da soli in base alla loro rica
 |---|---|---|---|
 | `text` | Testo su una riga | `placeholder`, `suggestions` (elenco di proposte: si sceglie o si scrive liberamente) | `@key` → testo |
 | `textarea` | Testo lungo | `rows`, `placeholder` | `@key` → testo |
-| `richtext` | Testo formattato: si legge impaginato, un tocco apre la modifica con la barra grassetto / corsivo / elenco | `rows`, `placeholder` | `@key` → testo |
+| `richtext` | Testo formattato: si legge impaginato, un tocco apre la modifica (`**grassetto**`, `*corsivo*`, elenchi, titoli, immagini e tabelle `| a \| b |`) | `rows`, `placeholder` | `@key` → testo |
 | `number` | Numero | | `@key` |
 | `stat` | Caratteristica con modificatore | `mod` (formula, `@this` = valore) | `@key`, `@key_mod` |
 | `computed` | Valore calcolato in sola lettura | `formula`, `signed` | `@key` |
@@ -88,6 +89,7 @@ Gli usi e i contatori dei privilegi si recuperano da soli in base alla loro rica
 | `select` | Scelta da elenco | `options` (array di testi) | `@key` → testo |
 | `list` | Tabella con righe aggiungibili | `columns` | `@key` = numero di righe, `@key.colonna` = elenco valori |
 | `features` | Privilegi: voci richiudibili con descrizione (`**grassetto**`, righe `- ` come elenco), usi con ricarica e un livello di sotto-privilegi | `placeholder` (testo quando è vuota), `variant: "journal"` (diario: solo titolo e testo, voci nuove in cima con la data), `variant: "notebook"` (schede di appunti: titolo e testo scritto sul posto; `legacyKey` indica un vecchio campo di testo da cui creare la prima scheda, `textPlaceholder` il testo segnaposto delle schede) | `@key` = numero di privilegi |
+| `hitdice` | Dadi vita in un riquadro, una riga per classe | `rows`: elenco di `{ count, die, choice, choiceIf, choiceTag, tag, changed, maxKey, auto, name, showIf }` — `count` = campo `resource` dei dadi rimasti, `die` = campo con il dado (es. "d8"), `choice` = campo `select` con cui cambiare il dado (solo quando `choiceIf` è vera, se c'è), `choiceTag`/`tag` = campo in cui salvare, con la scelta, il valore della formula `tag` (es. la classe), `changed` = condizione per segnare il dado come modificato, `maxKey` = campo numerico per il massimo scritto a mano, `auto` = formula del massimo automatico (mostrata quando è vuoto), `name` = formula del nome della classe | — |
 | `image` | Immagine (ridimensionata e salvata nella scheda) | | — |
 
 ### Colonne delle liste
@@ -119,7 +121,7 @@ Opzioni della lista:
 
 Tipi di colonna: `text`, `number`, `checkbox`, `computed` (con `formula`, dove si usa
 `@row.colonna`), `select` (con `options`), `notes` (un pulsante che apre la nota in una
-finestra a comparsa). `width` è la larghezza relativa; `weight: true` nasconde la colonna
+finestra a comparsa). `width` è la larghezza relativa, `size` una larghezza fissa in rem (es. `4.2` per una quantità), `emoji: "chiave"` (solo colonne `text`) aggiunge a sinistra un'emoji facoltativa salvata nella riga con quella chiave; `weight: true` nasconde la colonna
 quando il peso è disattivato.
 
 ## Formule

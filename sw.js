@@ -1,11 +1,11 @@
 // Service worker: rende l'app utilizzabile offline.
 // Strategia "network first" per avere sempre l'ultima versione quando c'è
 // connessione, con ripiego sulla cache quando si è offline.
-const CACHE = 'gdr-schede-v15';
+const CACHE = 'gdr-schede-v34';
 const ASSETS = [
   './', './index.html', './manifest.webmanifest', './css/style.css',
   './js/app.js', './js/ui.js', './js/store.js', './js/theme.js', './js/formula.js',
-  './js/engine.js', './js/systems.js', './js/sheet-render.js', './js/richtext.js', './js/spells.js', './js/images.js',
+  './js/engine.js', './js/systems.js', './js/sheet-render.js', './js/richtext.js', './js/spells.js', './js/images.js', './js/tables.js', './js/i18n.js', './js/i18n-en.js', './js/cropper.js',
   './js/views/home.js', './js/views/sheet.js', './js/views/editor.js', './js/views/spell-list.js',
   './icons/icon.svg', './icons/icon-192.png', './icons/icon-512.png',
 ];

@@ -1,5 +1,6 @@
 import { h, icon, modal } from './ui.js';
 import { store } from './store.js';
+import { t as tr } from './i18n.js';
 
 export function applyTheme() {
   const t = store.setting('theme') || 'auto';
@@ -11,7 +12,7 @@ export function applyTheme() {
 matchMedia('(prefers-color-scheme: dark)').addEventListener('change', applyTheme);
 
 export function themeToggle() {
-  const b = h('button', { type: 'button', class: 'btn ghost sq', title: 'Tema chiaro/scuro', 'aria-label': 'Cambia tema' });
+  const b = h('button', { type: 'button', class: 'btn ghost sq', title: tr('Tema chiaro/scuro'), 'aria-label': tr('Cambia tema') });
   const draw = () => b.replaceChildren(icon(document.documentElement.dataset.theme === 'dark' ? 'sun' : 'moon'));
   b.addEventListener('click', () => {
     store.setSetting('theme', document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark');
@@ -54,7 +55,7 @@ export function applyAccent(el, color) {
 export async function pickAccent(current, preview) {
   let chosen = current || null;
   const swatches = h('div', { class: 'swatches' });
-  const custom = h('input', { type: 'color', class: 'swatch-custom', value: chosen || '#9e2b25', 'aria-label': 'Colore personalizzato',
+  const custom = h('input', { type: 'color', class: 'swatch-custom', value: chosen || '#9e2b25', 'aria-label': tr('Colore personalizzato'),
     oninput: (e) => select(e.target.value) });
   const select = (c) => {
     chosen = c;
@@ -63,19 +64,19 @@ export async function pickAccent(current, preview) {
   };
   for (const [name, color] of ACCENTS) {
     swatches.append(h('button', {
-      type: 'button', class: `swatch${color ? '' : ' swatch-default'}`, title: name, 'aria-label': name,
+      type: 'button', class: `swatch${color ? '' : ' swatch-default'}`, title: tr(name), 'aria-label': tr(name),
       dataset: color ? { color } : {}, style: color ? { background: color } : null,
       onclick: () => select(color),
     }, icon('check')));
   }
   select(chosen);
   const ok = await modal({
-    title: 'Colore della scheda',
+    title: tr('Colore della scheda'),
     body: h('div', { class: 'stack gap' },
-      h('p', { class: 'muted small' }, 'Il colore secondario (titoli, schede, competenze, caselle) vale solo per questo personaggio.'),
+      h('p', { class: 'muted small' }, tr('Il colore secondario (titoli, schede, competenze, caselle) vale solo per questo personaggio.')),
       swatches,
-      h('label', { class: 'row gap' }, custom, h('span', {}, 'Personalizzato…'))),
-    actions: [{ label: 'Annulla', value: false }, { label: 'Usa questo colore', value: true, cls: 'primary' }],
+      h('label', { class: 'row gap' }, custom, h('span', {}, tr('Personalizzato…')))),
+    actions: [{ label: tr('Annulla'), value: false }, { label: tr('Usa questo colore'), value: true, cls: 'primary' }],
   });
   if (!ok) { preview(current || null); return undefined; }
   return chosen;

@@ -1,6 +1,7 @@
 // Motore della scheda: dato un modello (system) e i valori di un personaggio,
 // calcola i valori derivati e risolve i riferimenti @campo.
 import { compile, evaluate, toNum, isTruthy, FormulaError, syntaxError } from './formula.js';
+import { t } from './i18n.js';
 
 export const KEY_RE = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
 
@@ -18,6 +19,7 @@ export const FIELD_TYPES = {
   select: { label: 'Scelta da elenco' },
   list: { label: 'Lista (tabella)' },
   deathsaves: { label: 'Tiri contro morte (successi e fallimenti)' },
+  hitdice: { label: 'Dadi vita (una riga per classe)' },
   features: { label: 'Privilegi (voci richiudibili con usi)' },
   image: { label: 'Immagine' },
 };
@@ -64,7 +66,7 @@ export class Engine {
 
   memo(id, fn) {
     if (this.cache.has(id)) return this.cache.get(id);
-    if (this.stack.has(id)) throw new FormulaError(`Riferimento circolare su @${id}`);
+    if (this.stack.has(id)) throw new FormulaError(t('Riferimento circolare su @{id}', { id }));
     this.stack.add(id);
     try {
       const v = fn();
@@ -88,7 +90,7 @@ export class Engine {
       name = scope.self.key + name.slice(4);
     }
     if (name.startsWith('row.')) {
-      if (!scope.row) throw new FormulaError('@row si usa solo dentro le liste');
+      if (!scope.row) throw new FormulaError(t('@row si usa solo dentro le liste'));
       return this.rowValue(scope.list, scope.row, name.slice(4));
     }
     const dot = name.indexOf('.');
@@ -96,7 +98,7 @@ export class Engine {
       const base = name.slice(0, dot);
       const col = name.slice(dot + 1);
       const f = this.fields.get(base);
-      if (!f || f.type !== 'list') throw new FormulaError(`@${base} non è una lista`);
+      if (!f || f.type !== 'list') throw new FormulaError(t('@{nome} non è una lista', { nome: base }));
       return (this.raw(f) || []).map((r) => this.rowValue(f, r, col));
     }
     let f = this.fields.get(name);
@@ -107,7 +109,7 @@ export class Engine {
       if (m[2] === 'max' && (f.type === 'resource' || f.type === 'dots')) return this.max(f);
       if (m[2] === 'level' && f.type === 'skill') return toNum(this.raw(f));
     }
-    throw new FormulaError(`Campo @${name} inesistente`);
+    throw new FormulaError(t('Campo @{nome} inesistente', { nome: name }));
   }
 
   rawNumberish(f) {
@@ -153,6 +155,9 @@ export class Engine {
   max(f) {
     // pallini: il massimo può essere un numero o una formula (es. gli slot in base alla classe)
     if (f.type === 'dots') {
+      // massimo scritto a mano dal giocatore (es. slot incantesimo in più o in meno)
+      const own = this.manual(`${f.key}_max`);
+      if (own !== undefined && own !== '') return Math.max(0, Math.min(Number(f.maxLimit) || 30, Math.floor(toNum(own)))); // maxLimit: tetto per il valore a mano
       const src = String(f.max ?? 5).trim();
       if (/^\d+$/.test(src)) return Number(src);
       return this.memo(`${f.key}_max`, () => Math.max(0, Math.floor(toNum(this.ownFormula(src, f)))));
@@ -162,7 +167,7 @@ export class Engine {
 
   rowValue(list, row, col) {
     const c = (list.columns || []).find((x) => x.key === col);
-    if (!c) throw new FormulaError(`Colonna "${col}" inesistente in @${list.key}`);
+    if (!c) throw new FormulaError(t('Colonna "{col}" inesistente in @{lista}', { col, lista: list.key }));
     const v = row?.[col];
     switch (c.type) {
       case 'computed':
@@ -192,40 +197,48 @@ export const weightEnabled = (options) => !!options?.weight;
 /** Il modello contiene campi o colonne legati al peso? */
 export const hasWeight = (system) => allFields(system).some((f) => f.weight || (f.columns || []).some((c) => c.weight));
 
+const restName = (kind) => (kind === 'breve' ? t('Riposo breve') : kind === 'lungo' ? t('Riposo lungo') : kind);
+
 /** Controlla un modello e restituisce l'elenco dei problemi trovati. */
 export function validateSystem(system) {
   const problems = [];
   const add = (msg, where) => problems.push(where ? `${where}: ${msg}` : msg);
-  if (!system || typeof system !== 'object') return ['Il modello non è un oggetto valido'];
-  if (!system.name) add('Il modello non ha un nome');
-  if (!Array.isArray(system.sections)) return [...problems, 'Manca l\'elenco "sections"'];
+  if (!system || typeof system !== 'object') return [t('Il modello non è un oggetto valido')];
+  if (!system.name) add(t('Il modello non ha un nome'));
+  if (!Array.isArray(system.sections)) return [...problems, t('Manca l\'elenco "sections"')];
   const seen = new Map();
   const formulas = [];
   for (const [si, s] of system.sections.entries()) {
-    if (s.showIf) formulas.push([String(s.showIf), `${s.title || `Sezione ${si + 1}`} (visibile se)`]);
-    for (const m of String(s.title || '').matchAll(/\{([^{}]+)\}/g)) formulas.push([m[1], `${s.title} (titolo)`]);
-    if (!Array.isArray(s.fields)) { add('la sezione non ha "fields"', s.title || `Sezione ${si + 1}`); continue; }
+    if (s.showIf) formulas.push([String(s.showIf), `${s.title || t('Sezione {n}', { n: si + 1 })} (${t('visibile se')})`]);
+    for (const m of String(s.title || '').matchAll(/\{([^{}]+)\}/g)) formulas.push([m[1], `${s.title} (${t('titolo')})`]);
+    if (!Array.isArray(s.fields)) { add(t('la sezione non ha "fields"'), s.title || t('Sezione {n}', { n: si + 1 })); continue; }
     for (const f of s.fields) {
-      const where = `${s.title || 'Sezione'} › ${f.label || f.key || '(senza nome)'}`;
-      if (!FIELD_TYPES[f.type]) add(`tipo "${f.type}" sconosciuto`, where);
-      if (!f.key) { add('manca la chiave', where); continue; }
-      if (!KEY_RE.test(f.key)) add(`chiave "${f.key}" non valida (lettere, numeri, _; non iniziare con un numero)`, where);
-      if (f.key === 'this' || f.key === 'row') add(`la chiave "${f.key}" è riservata`, where);
-      if (seen.has(f.key)) add(`chiave "${f.key}" duplicata (già usata in ${seen.get(f.key)})`, where);
+      const where = `${s.title || t('Sezione')} › ${f.label || f.key || t('(senza nome)')}`;
+      if (!FIELD_TYPES[f.type]) add(t('tipo "{tipo}" sconosciuto', { tipo: f.type }), where);
+      if (!f.key) { add(t('manca la chiave'), where); continue; }
+      if (!KEY_RE.test(f.key)) add(t('chiave "{k}" non valida (lettere, numeri, _; non iniziare con un numero)', { k: f.key }), where);
+      if (f.key === 'this' || f.key === 'row') add(t('la chiave "{k}" è riservata', { k: f.key }), where);
+      if (seen.has(f.key)) add(t('chiave "{k}" duplicata (già usata in {dove})', { k: f.key, dove: seen.get(f.key) }), where);
       seen.set(f.key, where);
       for (const prop of ['formula', 'mod', 'max', 'showIf']) {
         if (f[prop] !== undefined && f[prop] !== '') formulas.push([String(f[prop]), `${where} (${prop})`]);
       }
       if (f.type === 'list') {
         const cols = new Set();
-        if (f.type === 'deathsaves') {
-          for (const k of [f.success || 'morte_ok', f.fail || 'morte_ko']) if (!system.sections.some((x) => (x.fields || []).some((y) => y.key === k))) add(`tiri contro morte: manca il campo "${k}"`, where);
+        if (f.type === 'hitdice') {
+          for (const r of f.rows || []) {
+            for (const k of [r.count, r.die]) if (!system.sections.some((x) => (x.fields || []).some((y) => y.key === k))) add(t('dadi vita: manca il campo "{k}"', { k }), where);
+            for (const prop of ['choiceIf', 'name', 'showIf']) if (r[prop]) formulas.push([String(r[prop]), `${where} (${prop})`]);
+          }
         }
-        if (f.groupBy && !(f.columns || []).some((c) => c.key === f.groupBy)) add(`raggruppa per "${f.groupBy}": colonna inesistente`, where);
-        for (const g of f.groups || []) if (g && !Array.isArray(g) && g.showIf) formulas.push([String(g.showIf), `${where} › gruppo ${g.label} (visibile se)`]);
+        if (f.type === 'deathsaves') {
+          for (const k of [f.success || 'morte_ok', f.fail || 'morte_ko']) if (!system.sections.some((x) => (x.fields || []).some((y) => y.key === k))) add(t('tiri contro morte: manca il campo "{k}"', { k }), where);
+        }
+        if (f.groupBy && !(f.columns || []).some((c) => c.key === f.groupBy)) add(t('raggruppa per "{k}": colonna inesistente', { k: f.groupBy }), where);
+        for (const g of f.groups || []) if (g && !Array.isArray(g) && g.showIf) formulas.push([String(g.showIf), `${where} › ${t('gruppo')} ${g.label} (${t('visibile se')})`]);
         for (const c of f.columns || []) {
-          if (!c.key || !KEY_RE.test(c.key)) add(`colonna con chiave non valida "${c.key ?? ''}"`, where);
-          if (cols.has(c.key)) add(`colonna "${c.key}" duplicata`, where);
+          if (!c.key || !KEY_RE.test(c.key)) add(t('colonna con chiave non valida "{k}"', { k: c.key ?? '' }), where);
+          if (cols.has(c.key)) add(t('colonna "{k}" duplicata', { k: c.key }), where);
           cols.add(c.key);
           if (c.type === 'computed') formulas.push([c.formula || '0', `${where} › ${c.label || c.key}`]);
         }
@@ -239,12 +252,12 @@ export function validateSystem(system) {
   for (const [kind, rules] of Object.entries(system.rests || {})) {
     for (const r of rules || []) {
       const err = r.if ? syntaxError(String(r.if)) : null;
-      if (err) add(err, `Riposo ${kind} (condizione)`);
-      for (const k of r.reset || []) if (!seen.has(k)) add(`il riposo ${kind} azzera "${k}", che non esiste`);
+      if (err) add(err, `${restName(kind)} (${t('condizione')})`);
+      for (const k of r.reset || []) if (!seen.has(k)) add(t('il riposo {tipo} azzera "{k}", che non esiste', { tipo: t(kind), k }));
       for (const x of r.restore || []) {
-        if (!seen.has(x.key)) add(`il riposo ${kind} recupera "${x.key}", che non esiste`);
+        if (!seen.has(x.key)) add(t('il riposo {tipo} recupera "{k}", che non esiste', { tipo: t(kind), k: x.key }));
         const e2 = syntaxError(String(x.amount ?? ''));
-        if (e2) add(e2, `Riposo ${kind} (quanto recuperare)`);
+        if (e2) add(e2, `${restName(kind)} (${t('quanto recuperare')})`);
       }
     }
   }
@@ -269,13 +282,13 @@ export function validateSystem(system) {
       for (const r of rules || []) {
         if (!r.if) continue;
         const res = engine.safe(() => evaluate(compile(String(r.if)), { resolve: engine.resolver() }));
-        if (!res.ok) add(res.error, `Riposo ${kind} (condizione)`);
+        if (!res.ok) add(res.error, `${restName(kind)} (${t('condizione')})`);
       }
     }
     for (const s of system.sections) {
       if (!s.showIf) continue;
       const r = engine.safe(() => evaluate(compile(String(s.showIf)), { resolve: engine.resolver() }));
-      if (!r.ok) add(r.error, `${s.title || 'Sezione'} (visibile se)`);
+      if (!r.ok) add(r.error, `${s.title || t('Sezione')} (${t('visibile se')})`);
     }
   }
   return problems;

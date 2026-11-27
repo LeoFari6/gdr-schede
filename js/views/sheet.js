@@ -5,6 +5,8 @@ import { renderSheet } from '../sheet-render.js';
 import { themeToggle, applyAccent, pickAccent } from '../theme.js';
 import { openSpellList } from './spell-list.js';
 import { withImages } from '../images.js';
+import { openImageViewer } from '../richtext.js';
+import { t } from '../i18n.js';
 
 // Tab aperta per ogni personaggio, per ritrovarla dopo un ridisegno.
 const lastTab = new Map();
@@ -18,11 +20,12 @@ let printTarget = null; // { sys, id } del personaggio aperto
 export function makePrintRoot({ sys, name, values, options = {} }) {
   const sheet = renderSheet({ system: sys, values: structuredClone(values), options: { ...options, print: true } });
   const root = h('div', { id: 'print-root', class: sys.theme === 'fantasy' ? 'fantasy' : '' },
-    h('header', { class: 'print-head' }, h('h1', {}, name), h('p', {}, sys.name)),
+    h('header', { class: 'print-head' }, h('h1', {}, name), h('p', {}, t(sys.name))),
     sheet.el);
   root.querySelectorAll('.rt-editor, .list-tools').forEach((e) => e.remove()); // parti solo per modificare
   // su carta i campi diventano testo semplice, che va a capo invece di essere tagliato
   root.querySelectorAll('input:not([type=checkbox]), select').forEach((el) => {
+    if (el.hidden) { el.remove(); return; } // es. la scelta del dado vita quando la classe è nota
     const text = el.tagName === 'SELECT' ? (el.value ? el.options[el.selectedIndex]?.text ?? '' : '') : el.value;
     el.replaceWith(h('span', { class: `${el.className} print-value` }, text));
   });
@@ -30,8 +33,10 @@ export function makePrintRoot({ sys, name, values, options = {} }) {
   // testi vuoti (es. Ideali non compilati): via anche l'etichetta
   root.querySelectorAll('.f-richtext').forEach((f) => { if (!f.querySelector('.rt-view p, .rt-view li')) f.remove(); });
   // via le sezioni (e le tab) rimaste senza contenuto
-  const filled = 'input, select, textarea, .val, .feat, .lgroup, .dot, .stat-box, .skill-row, .rt-view p, .rt-view li, .counters, img';
-  root.querySelectorAll('.sec').forEach((s) => { if (!s.querySelector('.f') || !s.querySelector(filled)) s.remove(); });
+  // (i campi qui sono già diventati testo: contano se hanno un valore; le tabelle se hanno righe)
+  const filled = 'input, select, textarea, .val, .feat, .lgroup, .dot, .stat-box, .skill-row, .rt-view p, .rt-view li, .counters, img, table.list tbody tr';
+  const hasValue = (s) => [...s.querySelectorAll('.print-value')].some((v) => !['', '0'].includes(v.textContent.trim())); // es. monete tutte a 0: via
+  root.querySelectorAll('.sec').forEach((s) => { if (!s.querySelector('.f') || !(s.querySelector(filled) || hasValue(s))) s.remove(); });
   root.querySelectorAll('.sheet-page').forEach((p) => { if (!p.querySelector('.sec')) p.remove(); });
   // titolo di sezione uguale a quello della tab (es. Incantesimi / Incantesimi): ne basta uno
   root.querySelectorAll('.sheet-page').forEach((p) => {
@@ -55,23 +60,43 @@ addEventListener('afterprint', removePrint);
 export function renderCharacter(root, id) {
   const c = store.character(id);
   if (!c) {
-    root.append(h('main', { class: 'empty' }, h('h1', {}, 'Personaggio non trovato'), h('a', { class: 'btn', href: '#/' }, 'Torna alla home')));
+    root.append(h('main', { class: 'empty' }, h('h1', {}, t('Personaggio non trovato')), h('a', { class: 'btn', href: '#/' }, t('Torna alla home'))));
     return;
   }
   const sys = store.system(c.systemId);
   if (!sys) {
     root.append(h('main', { class: 'empty' },
-      h('h1', {}, 'Modello mancante'),
-      h('p', {}, `Il modello usato da "${c.name}" (${c.systemId}) non è presente. Importalo dalla home e riapri la scheda.`),
-      h('a', { class: 'btn', href: '#/' }, 'Torna alla home')));
+      h('h1', {}, t('Modello mancante')),
+      h('p', {}, t('Il modello usato da "{nome}" ({id}) non è presente. Importalo dalla home e riapri la scheda.', { nome: c.name, id: c.systemId })),
+      h('a', { class: 'btn', href: '#/' }, t('Torna alla home'))));
     return;
   }
 
+  // il campo del nome è largo quanto il testo, così il ritratto gli sta subito accanto
+  const fitName = () => {
+    const cs = getComputedStyle(nameInput);
+    const g = (fitName.canvas ||= document.createElement('canvas')).getContext('2d');
+    g.font = `${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
+    const text = nameInput.value || nameInput.placeholder || ' ';
+    const pad = parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight) + parseFloat(cs.borderLeftWidth) + parseFloat(cs.borderRightWidth);
+    nameInput.style.width = `${Math.ceil(g.measureText(text).width + pad + 6)}px`;
+  };
   const nameInput = h('input', {
-    class: 'title-input', value: c.name, 'aria-label': 'Nome del personaggio',
-    oninput: (e) => { store.updateCharacter(c.id, { name: e.target.value }); document.title = `${e.target.value} · Schede GdR`; },
+    class: 'title-input', value: c.name, 'aria-label': t('Nome del personaggio'),
+    oninput: (e) => { store.updateCharacter(c.id, { name: e.target.value }); document.title = `${e.target.value} · ${t('Schede GdR')}`; fitName(); },
   });
-  document.title = `${c.name} · Schede GdR`;
+
+  // ritratto in un cerchio a sinistra del nome (il primo campo immagine della scheda)
+  const portraitField = allFields(sys).find((f) => f.type === 'image');
+  const portrait = h('button', { type: 'button', class: 'title-avatar', title: t('Ritratto'), 'aria-label': t('Ritratto'),
+    onclick: () => { const cur = store.character(c.id); const src = cur?.values?.[portraitField?.key]; if (src) openImageViewer(src, cur.name); } });
+  const drawPortrait = () => {
+    const src = portraitField ? store.character(c.id)?.values?.[portraitField.key] : null;
+    portrait.hidden = !src;
+    portrait.replaceChildren(...(src ? [h('img', { src, alt: '' })] : []));
+  };
+  drawPortrait();
+  document.title = `${c.name} · ${t('Schede GdR')}`;
 
   printTarget = { sys, id: c.id };
   const sheet = renderSheet({
@@ -80,7 +105,7 @@ export function renderCharacter(root, id) {
     options: c.options || {},
     initialTab: lastTab.get(c.id),
     onTab: (name) => lastTab.set(c.id, name),
-    onChange: (key, v) => store.setValue(c.id, key, v),
+    onChange: (key, v) => { store.setValue(c.id, key, v); if (key === portraitField?.key) drawPortrait(); },
   });
 
   applyAccent(document.documentElement, c.options?.accent);
@@ -101,7 +126,7 @@ export function renderCharacter(root, id) {
   const weightOn = weightEnabled(c.options);
   const toggleWeight = () => {
     store.updateCharacter(c.id, { options: { ...(c.options || {}), weight: !weightOn } });
-    toast(weightOn ? 'Peso e ingombro nascosti' : 'Peso e ingombro attivi');
+    toast(weightOn ? t('Peso e ingombro nascosti') : t('Peso e ingombro attivi'));
     redraw();
   };
   // Riposi: applicano le regole del modello (es. slot del Warlock col riposo
@@ -113,7 +138,7 @@ export function renderCharacter(root, id) {
     const { changes, labels } = applyRest(sys, c.values, kind);
     const keys = Object.keys(changes);
     keys.forEach((k) => store.setValue(c.id, k, changes[k]));
-    toast(labels.length ? `${name}: recuperati ${labels.join(', ')}` : `${name}: niente da recuperare`, labels.length ? 'ok' : 'info', 3500);
+    toast(labels.length ? t('{riposo}: recuperati {cosa}', { riposo: name, cosa: labels.map((l) => t(l)).join(', ') }) : t('{riposo}: niente da recuperare', { riposo: name }), labels.length ? 'ok' : 'info', 3500);
     if (keys.length) redraw();
   };
 
@@ -121,34 +146,36 @@ export function renderCharacter(root, id) {
   const menuToggles = allFields(sys).filter((f) => f.menu && f.type === 'checkbox').map((f) => {
     const on = !!(c.values[f.key] ?? f.default);
     return {
-      label: on ? (f.menuOn || `Disattiva: ${f.label}`) : (f.menuOff || `Attiva: ${f.label}`),
+      label: on ? (f.menuOn ? t(f.menuOn) : t('Disattiva: {nome}', { nome: t(f.label) })) : (f.menuOff ? t(f.menuOff) : t('Attiva: {nome}', { nome: t(f.label) })),
       icon: on ? 'x' : 'plus',
-      onClick: () => { store.setValue(c.id, f.key, !on); toast(`${f.label}: ${on ? 'disattivato' : 'attivato'}`); redraw(); },
+      onClick: () => { store.setValue(c.id, f.key, !on); toast(`${t(f.label)}: ${on ? t('disattivato') : t('attivato')}`); redraw(); },
     };
   });
 
   const header = h('header', { class: `topbar sheet-top${sys.theme === 'fantasy' ? ' fantasy' : ''}` },
-    h('a', { href: '#/', class: 'btn ghost sq', 'aria-label': 'Indietro', title: 'Tutti i personaggi' }, icon('back')),
-    h('div', { class: 'title-wrap' }, nameInput, h('span', { class: 'chip' }, sys.name)),
+    h('a', { href: '#/', class: 'btn ghost sq', 'aria-label': t('Indietro'), title: t('Tutti i personaggi') }, icon('back')),
+    h('div', { class: 'title-wrap' }, portrait, nameInput, h('span', { class: 'chip' }, t(sys.name))),
     h('div', { class: 'topbar-actions' },
-      h('button', { type: 'button', class: 'btn ghost sq', title: 'Colore della scheda', 'aria-label': 'Colore della scheda', onclick: chooseColor }, icon('palette')),
+      h('button', { type: 'button', class: 'btn ghost sq', title: t('Colore della scheda'), 'aria-label': t('Colore della scheda'), onclick: chooseColor }, icon('palette')),
       themeToggle(),
       menuButton([
-        canRest ? { label: 'Riposo breve', icon: 'sun', onClick: () => rest('Riposo breve', 'breve') } : null,
-        canRest ? { label: 'Riposo lungo', icon: 'moon', onClick: () => rest('Riposo lungo', 'lungo') } : null,
-        usesSpellList ? { label: 'Elenco incantesimi', icon: 'book', onClick: openSpellList } : null,
+        canRest ? { label: t('Riposo breve'), icon: 'sun', onClick: () => rest(t('Riposo breve'), 'breve') } : null,
+        canRest ? { label: t('Riposo lungo'), icon: 'moon', onClick: () => rest(t('Riposo lungo'), 'lungo') } : null,
+        usesSpellList ? { label: t('Elenco incantesimi'), icon: 'book', onClick: openSpellList } : null,
         ...menuToggles,
-        hasWeight(sys) ? { label: weightOn ? 'Disattiva peso e ingombro' : 'Attiva peso e ingombro', icon: 'weight', onClick: toggleWeight } : null,
-        { label: 'Esporta (.json)', icon: 'download', onClick: async () => { download(`${slugify(c.name)}.json`, await withImages(store.exportCharacter(c.id))); toast('Scheda esportata'); } },
-        { label: 'Stampa / PDF', icon: 'print', onClick: () => { buildPrint(); window.print(); } },
-        { label: 'Duplica', icon: 'copy', onClick: () => { const d = store.duplicateCharacter(c.id); location.hash = `#/c/${d.id}`; } },
-        store.isBuiltin(sys.id) ? null : { label: 'Modifica modello', icon: 'edit', onClick: () => { location.hash = `#/t/${sys.id}`; } },
-        { label: 'Elimina', icon: 'trash', danger: true, onClick: async () => {
-          if (await confirmDialog('Eliminare il personaggio?', `"${c.name}" verrà eliminato da questo dispositivo.`, 'Elimina', true)) {
+        hasWeight(sys) ? { label: weightOn ? t('Disattiva peso e ingombro') : t('Attiva peso e ingombro'), icon: 'weight', onClick: toggleWeight } : null,
+        { label: t('Esporta (.json)'), icon: 'download', onClick: async () => { download(`${slugify(c.name)}.json`, await withImages(store.exportCharacter(c.id))); toast(t('Scheda esportata')); } },
+        { label: t('Stampa / PDF'), icon: 'print', onClick: () => { buildPrint(); window.print(); } },
+        { label: t('Duplica'), icon: 'copy', onClick: () => { const d = store.duplicateCharacter(c.id); location.hash = `#/c/${d.id}`; } },
+        store.isBuiltin(sys.id) ? null : { label: t('Modifica modello'), icon: 'edit', onClick: () => { location.hash = `#/t/${sys.id}`; } },
+        { label: t('Elimina'), icon: 'trash', danger: true, onClick: async () => {
+          if (await confirmDialog(t('Eliminare il personaggio?'), t('"{nome}" verrà eliminato da questo dispositivo.', { nome: c.name }), t('Elimina'), true)) {
             store.deleteCharacter(c.id); location.hash = '#/';
           }
         } },
-      ], { title: 'Altre azioni' })));
+      ], { title: t('Altre azioni') })));
 
   root.append(header, h('main', { class: 'sheet-main' }, sheet.el));
+  requestAnimationFrame(fitName);
+  document.fonts?.ready.then(fitName); // il carattere della scheda può arrivare dopo
 }

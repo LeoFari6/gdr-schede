@@ -2,6 +2,7 @@
 import { BUILTIN_SYSTEMS } from './systems.js';
 import { uid } from './ui.js';
 import { validateSystem } from './engine.js';
+import { t } from './i18n.js';
 
 const KEY = 'gdr-schede/v1';
 export const FORMAT = 'gdr-schede';
@@ -45,7 +46,7 @@ function flush() {
   try {
     localStorage.setItem(KEY, JSON.stringify(state));
   } catch (e) {
-    listeners.forEach((fn) => fn({ type: 'error', error: 'Impossibile salvare: spazio di archiviazione esaurito o non disponibile. Esporta un backup.' }));
+    listeners.forEach((fn) => fn({ type: 'error', error: t('Impossibile salvare: spazio di archiviazione esaurito o non disponibile. Esporta un backup.') }));
   }
 }
 function persist() {
@@ -74,7 +75,7 @@ export const store = {
   isBuiltin(id) { return BUILTIN_SYSTEMS.some((s) => s.id === id); },
 
   saveSystem(sys) {
-    if (this.isBuiltin(sys.id)) throw new Error('I modelli inclusi non si possono modificare: duplicali.');
+    if (this.isBuiltin(sys.id)) throw new Error(t('I modelli inclusi non si possono modificare: duplicali.'));
     const copy = clone(sys);
     delete copy.builtin;
     copy.updatedAt = now();
@@ -89,7 +90,7 @@ export const store = {
     if (!src) return null;
     const copy = clone(src);
     copy.id = `m_${uid()}`;
-    copy.name = name || `${src.name} (copia)`;
+    copy.name = name || `${t(src.name)} (${t('copia')})`;
     copy.basedOn = src.id;
     delete copy.builtin;
     return this.saveSystem(copy);
@@ -118,7 +119,7 @@ export const store = {
   character(id) { return state.characters.find((c) => c.id === id) || null; },
 
   createCharacter(systemId, name) {
-    const c = { id: `p_${uid()}`, name: name || 'Nuovo personaggio', systemId, values: {}, createdAt: now(), updatedAt: now() };
+    const c = { id: `p_${uid()}`, name: name || t('Nuovo personaggio'), systemId, values: {}, createdAt: now(), updatedAt: now() };
     state.characters.push(c);
     persist();
     return c;
@@ -143,7 +144,7 @@ export const store = {
   duplicateCharacter(id) {
     const src = this.character(id);
     if (!src) return null;
-    const c = { ...clone(src), id: `p_${uid()}`, name: `${src.name} (copia)`, createdAt: now(), updatedAt: now() };
+    const c = { ...clone(src), id: `p_${uid()}`, name: `${src.name} (${t('copia')})`, createdAt: now(), updatedAt: now() };
     state.characters.push(c);
     persist();
     return c;
@@ -173,12 +174,12 @@ export const store = {
   // ---- import --------------------------------------------------------
   /** Importa un file esportato. Restituisce un riepilogo testuale. */
   importData(data) {
-    if (!data || typeof data !== 'object') throw new Error('File non valido');
+    if (!data || typeof data !== 'object') throw new Error(t('File non valido'));
     // Accetta anche un modello "nudo" (oggetto con sections)
     if (!data.format && Array.isArray(data.sections)) data = { format: FORMAT, type: 'system', system: data };
-    if (data.format !== FORMAT) throw new Error('Questo file non è stato esportato da Schede GdR');
+    if (data.format !== FORMAT) throw new Error(t('Questo file non è stato esportato da Schede GdR'));
     // Per ora non si importano modelli da soli: solo personaggi (con il loro modello) e backup.
-    if (data.type === 'system') throw new Error('importare modelli non è disponibile per ora. Puoi importare personaggi e backup.');
+    if (data.type === 'system') throw new Error(t('importare modelli non è disponibile per ora. Puoi importare personaggi e backup.'));
 
     const report = { systems: 0, characters: 0, warnings: [] };
     const idMap = new Map();
@@ -186,7 +187,7 @@ export const store = {
     const importSystem = (sys) => {
       if (!sys) return null;
       const problems = validateSystem(sys);
-      if (problems.length) report.warnings.push(`Modello "${sys.name}": ${problems.length} problemi (${problems[0]})`);
+      if (problems.length) report.warnings.push(t('Modello "{nome}": {n} problemi ({primo})', { nome: sys.name, n: problems.length, primo: problems[0] }));
       const existing = this.system(sys.id);
       if (existing && JSON.stringify(stripMeta(existing)) === JSON.stringify(stripMeta(sys))) {
         idMap.set(sys.id, sys.id);
@@ -213,7 +214,7 @@ export const store = {
     const importCharacter = (ch, fallbackSystemId) => {
       const c = clone(ch);
       c.systemId = idMap.get(c.systemId) || fallbackSystemId || c.systemId;
-      if (!this.system(c.systemId)) report.warnings.push(`"${c.name}": modello mancante (${c.systemId})`);
+      if (!this.system(c.systemId)) report.warnings.push(t('"{nome}": modello mancante ({id})', { nome: c.name, id: c.systemId }));
       if (!c.id || this.character(c.id)) c.id = `p_${uid()}`;
       c.values = c.values || {};
       c.updatedAt = now();
@@ -228,7 +229,7 @@ export const store = {
     } else if (data.type === 'backup') {
       (data.systems || []).forEach(importSystem);
       (data.characters || []).forEach((c) => importCharacter(c));
-    } else throw new Error(`Tipo di file sconosciuto: ${data.type}`);
+    } else throw new Error(t('Tipo di file sconosciuto: {tipo}', { tipo: data.type }));
 
     persist();
     return report;

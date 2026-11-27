@@ -28,11 +28,11 @@ const featureSection = (id, title, tab, extra = {}) => ({
 });
 
 const inventoryColumns = (weightLabel) => [
-  { key: 'oggetto', label: 'Oggetto', type: 'text', width: 3 },
+  { key: 'oggetto', label: 'Oggetto', type: 'text', width: 3, emoji: 'icona' }, // emoji facoltativa a sinistra
   { key: 'note', label: 'Note', type: 'notes' },
-  { key: 'qta', label: 'Qtà', type: 'number' },
-  { key: 'peso', label: weightLabel, type: 'number', weight: true },
-  { key: 'tot', label: 'Totale', type: 'computed', formula: '@row.qta * @row.peso', weight: true },
+  { key: 'qta', label: 'Qtà', type: 'number', size: 4.2 },
+  { key: 'peso', label: weightLabel, type: 'number', weight: true, size: 6 },
+  { key: 'tot', label: 'Totale', type: 'computed', formula: '@row.qta * @row.peso', weight: true, size: 5.5 },
 ];
 
 export const GENERIC = {
@@ -106,18 +106,38 @@ function hitDiceFields(n) {
   const cls = n === 1 ? 'classe' : 'classe_2';
   const lvl = n === 1 ? 'livello' : 'livello_2';
   const known = isClass(cls, Object.values(HIT_DIE).flat());
-  const die = Object.entries(HIT_DIE).reduceRight((rest, [d, list]) => `if(${isClass(cls, list)}, "${d}", ${rest})`, `@dado_hb${sfx}`);
+  const classDie = (fallback) => Object.entries(HIT_DIE).reduceRight((rest, [d, list]) => `if(${isClass(cls, list)}, "${d}", ${rest})`, fallback);
+  const byClass = classDie(`@dado_hb${sfx}`);
+  // il dado scelto a mano vale per la classe con cui è stato scelto (dado_hb_cls): cambiando
+  // classe si torna al dado della classe; per le classi homebrew vale sempre la scelta
+  const die = `if(@dado_hb_cls${sfx} == @${cls} && @${cls} != "", @dado_hb${sfx}, ${byClass})`;
   const name = n === 1
     ? '{if(@multiclasse, concat(" · ", if(@classe == "", "1ª classe", @classe)), "")}'
     : '{concat(" · ", if(@classe_2 == "", "2ª classe", @classe_2))}';
-  const multi = n === 1 ? '' : '@multiclasse && ';
-  return [
-    { key: `tipo_dv${sfx}`, label: 'Dado vita', type: 'computed', hidden: true, formula: die },
-    // rimasti / totale (= livello della classe); il riposo lungo li recupera tutti
-    { key: `dv${sfx}`, label: `Dadi vita${name} ({@tipo_dv${sfx}})`, type: 'resource', max: `@${lvl}`, emphasis: 'compact', showIf: n === 1 ? undefined : '@multiclasse' },
-    { key: `dado_hb${sfx}`, label: `Dado vita${name}`, type: 'select', options: ['d6', 'd8', 'd10', 'd12'], default: 'd8', showIf: `${multi}@${cls} != "" && !(${known})` },
-  ];
+  return {
+    // campi nascosti: si vedono e si modificano nel riquadro "Dadi vita" (tipo hitdice)
+    fields: [
+      { key: `tipo_dv${sfx}`, label: 'Dado vita', type: 'computed', hidden: true, formula: die },
+      { key: `dado_classe${sfx}`, label: 'Dado vita della classe', type: 'computed', hidden: true, formula: classDie('""') }, // "" = homebrew
+      // rimasti / totale (= livello della classe, oppure il numero scritto a mano in dv_tot);
+      // il riposo lungo li recupera tutti
+      { key: `dv${sfx}`, label: `Dadi vita${name} ({@tipo_dv${sfx}})`, type: 'resource', max: `if(@dv_tot${sfx} > 0, @dv_tot${sfx}, @${lvl})`, hidden: true },
+      { key: `dv_tot${sfx}`, label: `Dadi vita massimi${name}`, type: 'number', hidden: true },
+      { key: `dado_hb${sfx}`, label: `Dado vita${name}`, type: 'select', options: ['d6', 'd8', 'd10', 'd12'], default: 'd8', hidden: true },
+      { key: `dado_hb_cls${sfx}`, label: `Classe del dado scelto${name}`, type: 'text', hidden: true },
+    ],
+    row: {
+      count: `dv${sfx}`, die: `tipo_dv${sfx}`, choice: `dado_hb${sfx}`,
+      choiceTag: `dado_hb_cls${sfx}`, tag: `@${cls}`, // con la scelta si ricorda per quale classe vale
+      choiceAuto: `@dado_classe${sfx}`, // scegliendo il dado della classe si torna all'automatico
+      maxKey: `dv_tot${sfx}`, auto: `@${lvl}`, // massimo modificabile; vuoto = livello della classe
+      changed: `(${known}) && @dado_hb_cls${sfx} == @${cls} && @dado_hb${sfx} != @dado_classe${sfx}`, // dado diverso da quello della classe
+      name: n === 1 ? '@classe' : 'if(@classe_2 == "", "2ª classe", @classe_2)',
+      showIf: n === 1 ? undefined : '@multiclasse',
+    },
+  };
 }
+const HD = [hitDiceFields(1), hitDiceFields(2)];
 
 const slotKeys = (n) => SLOT_MAX.map((_, i) => `slot${n === 1 ? '' : n}_${i + 1}`);
 
@@ -191,6 +211,7 @@ function spellcasting(n) {
   // (3 + 2 + 2 + 2), poi gli slot usati di ogni livello, poi l'elenco.
   return {
     id: `magia${sfx}`, title: `Incantesimi${cls}`, tab: 'Incantesimi', columns: 9, showIf: caster.sectionShowIf,
+    editMax: 'Numero di slot', // pulsante per cambiare a mano quanti slot ha ogni livello
     fields: [
       ...caster.hidden,
       {
@@ -203,7 +224,7 @@ function spellcasting(n) {
       // slot: quanti pallini dipende da classe e livello; si vedono solo i livelli sbloccati
       ...SLOT_MAX.map((_, i) => {
         const key = `slot${n === 1 ? '' : n}_${i + 1}`;
-        return { key, label: `Slot ${i + 1}°`, type: 'dots', max: caster.slotMax(i + 1), showIf: `@${key}_max > 0` };
+        return { key, label: `Slot ${i + 1}°`, type: 'dots', max: caster.slotMax(i + 1), maxLimit: 9, showIf: `@${key}_max > 0` }; // a mano al massimo 9 slot per livello
       }),
       {
         // divisi per livello (trucchetti, 1°…9°), ogni riga su una linea che scorre di lato
@@ -295,11 +316,14 @@ export const DND5E = {
       id: 'pf', title: 'Punti ferita', tab: 'Principale', columns: 3,
       fields: [
         // il massimo si cambia direttamente nel contatore (il campo pf_max resta per le formule)
-        { key: 'pf', label: 'Punti ferita', type: 'resource', max: '@pf_max', editableMax: true, span: 2, emphasis: 'primary' },
+        // i temporanei si scrivono nel contatore e il − li toglie per primi (il campo pf_temp resta per le formule)
+        { key: 'pf', label: 'Punti ferita', type: 'resource', max: '@pf_max', editableMax: true, temp: 'pf_temp', span: 2, emphasis: 'primary' },
         { key: 'pf_max', label: 'PF massimi', type: 'number', default: 10, hidden: true },
-        { key: 'pf_temp', label: 'PF temporanei', type: 'number' },
-        ...hitDiceFields(1),
-        ...hitDiceFields(2),
+        { key: 'pf_temp', label: 'PF temporanei', type: 'number', hidden: true },
+        // dadi vita di tutte le classi in un solo riquadro, una riga per classe
+        // a destra, alto quanto punti ferita + tiri contro morte
+        { key: 'dadi_vita', label: 'Dadi vita', type: 'hitdice', rowSpan: 2, rows: HD.map((x) => x.row) },
+        ...HD.flatMap((x) => x.fields),
         // un solo contatore a pallini per successi e fallimenti (i valori restano in morte_ok / morte_ko)
         { key: 'tiri_morte', label: 'Tiri contro morte', type: 'deathsaves', success: 'morte_ok', fail: 'morte_ko', span: 2 },
         { key: 'morte_ok', label: 'Tiri contro morte: successi', type: 'dots', max: 3, hidden: true },

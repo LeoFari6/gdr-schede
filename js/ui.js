@@ -1,4 +1,5 @@
 // Piccole utility per costruire il DOM senza framework.
+import { t, locale } from './i18n.js';
 
 export function h(tag, props = {}, ...children) {
   const el = document.createElement(tag);
@@ -44,6 +45,8 @@ export const icon = (name) => {
     note: 'M6 3h9l4 4v14H6zM14 3v5h5M9 12h7M9 16h5',
     weight: 'M12 7a2 2 0 100-4 2 2 0 000 4zM6 8h12l3 12H3z',
     book: 'M5 4h11a3 3 0 013 3v13H8a3 3 0 01-3-3zM5 17a3 3 0 013-3h11',
+    crop: 'M6 2v14a2 2 0 002 2h14M2 6h14a2 2 0 012 2v14',
+    image: 'M4 5h16v14H4zM4 16l5-5 4 4 2-2 5 5M15 9h.01',
     alert: 'M12 9v4M12 17h.01M10.3 3.9L2 18a2 2 0 001.7 3h16.6a2 2 0 001.7-3L13.7 3.9a2 2 0 00-3.4 0z',
   };
   const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
@@ -94,16 +97,16 @@ export function modal({ title, body, actions = [{ label: 'OK', value: true, cls:
   });
 }
 
-export const confirmDialog = (title, text, okLabel = 'Conferma', danger = false) =>
+export const confirmDialog = (title, text, okLabel = t('Conferma'), danger = false) =>
   modal({ title, body: h('p', {}, text), actions: [
-    { label: 'Annulla', value: false },
+    { label: t('Annulla'), value: false },
     { label: okLabel, value: true, cls: danger ? 'primary danger' : 'primary' },
   ] });
 
 export function promptDialog(title, label, initial = '') {
   const input = h('input', { type: 'text', value: initial, class: 'input' });
   return modal({ title, body: h('label', { class: 'stack' }, h('span', { class: 'lbl' }, label), input), actions: [
-    { label: 'Annulla', value: null },
+    { label: t('Annulla'), value: null },
     { label: 'OK', value: () => input.value.trim() || null, cls: 'primary' },
   ] });
 }
@@ -142,13 +145,13 @@ export function readImageResized(file, maxSize = 320) {
       URL.revokeObjectURL(url);
       resolve(canvas.toDataURL('image/jpeg', 0.85));
     };
-    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Immagine non valida')); };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error(t('Immagine non valida'))); };
     img.src = url;
   });
 }
 
 /** Menu a tendina semplice. items: [{label, icon, onClick, danger}] */
-export function menuButton(items, { title = 'Altro', iconName = 'more', label = '' } = {}) {
+export function menuButton(items, { title = t('Altro'), iconName = 'more', label = '' } = {}) {
   const wrap = h('div', { class: 'menu' });
   const list = h('div', { class: 'menu-list', role: 'menu' },
     items.filter(Boolean).map((it) => h('button', {
@@ -186,11 +189,11 @@ export function debounce(fn, ms = 200) {
 export function relativeTime(ts) {
   if (!ts) return '';
   const diff = (Date.now() - ts) / 1000;
-  if (diff < 60) return 'adesso';
-  if (diff < 3600) return `${Math.floor(diff / 60)} min fa`;
-  if (diff < 86400) return `${Math.floor(diff / 3600)} h fa`;
-  if (diff < 86400 * 7) return `${Math.floor(diff / 86400)} g fa`;
-  return new Date(ts).toLocaleDateString('it-IT');
+  if (diff < 60) return t('adesso');
+  if (diff < 3600) return t('{n} min fa', { n: Math.floor(diff / 60) });
+  if (diff < 86400) return t('{n} h fa', { n: Math.floor(diff / 3600) });
+  if (diff < 86400 * 7) return t('{n} g fa', { n: Math.floor(diff / 86400) });
+  return new Date(ts).toLocaleDateString(locale);
 }
 
 /**

@@ -385,3 +385,108 @@ test('immagini nei testi: grandezza scritta nella riga', async () => {
   assert.equal(setImageSize(t, 'abc', 3), 'prima\n![Tabella](img:abc 15%)\n![](img:xyz 40%)');
   assert.deepEqual([...imageIdsIn({ a: t })], ['abc', 'xyz']);
 });
+
+test('tabelle nei testi: lettura, scrittura e sostituzione', async () => {
+  const { parseTable, tableToText, replaceTable } = await import('../js/tables.js');
+  const t = parseTable(['| FOR | DES |', '|---|---|', '| 6 (-2) | 15 (+2) |', '| a \\| b |']);
+  assert.equal(t.header, true);
+  assert.deepEqual(t.rows, [['FOR', 'DES'], ['6 (-2)', '15 (+2)'], ['a | b', '']]);
+  assert.equal(tableToText(t), '| FOR | DES |\n| --- | --- |\n| 6 (-2) | 15 (+2) |\n| a \\| b |  |');
+  assert.equal(parseTable(['| x | y |']).header, false);
+  const text = 'prima\n| a |\n| b |\nmezzo\n| c |\ndopo';
+  assert.equal(replaceTable(text, 1, '| z |'), 'prima\n| a |\n| b |\nmezzo\n| z |\ndopo');
+  assert.equal(replaceTable(text, 0, ''), 'prima\nmezzo\n| c |\ndopo');
+  const { MAX_TABLE_ROWS, MAX_TABLE_COLS } = await import('../js/tables.js');
+  const big = parseTable(Array.from({ length: 50 }, () => `|${' x |'.repeat(25)}`));
+  assert.equal(big.rows.length, MAX_TABLE_ROWS);
+  assert.equal(big.rows[0].length, MAX_TABLE_COLS);
+});
+
+test('punti ferita temporanei nel contatore e azzerati dal riposo lungo', () => {
+  const dnd = BUILTIN_SYSTEMS.find((s) => s.id === 'dnd5e');
+  const fields = dnd.sections.flatMap((s) => s.fields);
+  assert.equal(fields.find((f) => f.key === 'pf').temp, 'pf_temp');
+  assert.equal(fields.find((f) => f.key === 'pf_temp').hidden, true);
+  const r = applyRest(dnd, { pf_max: 20, pf: 5, pf_temp: 7 }, 'lungo');
+  assert.ok('pf_temp' in r.changes && r.changes.pf_temp === undefined); // undefined = torna a 0
+  assert.ok('pf' in r.changes);
+});
+
+test('dadi vita: un riquadro per tutte le classi, dado scelto per le homebrew', () => {
+  const dnd = BUILTIN_SYSTEMS.find((s) => s.id === 'dnd5e');
+  const fields = dnd.sections.flatMap((s) => s.fields);
+  const hd = fields.find((f) => f.type === 'hitdice');
+  assert.equal(hd.rows.length, 2);
+  const e = new Engine(dnd, { classe: 'Barbaro', multiclasse: true, classe_2: 'Cacciatore', dado_hb_2: 'd10' });
+  assert.equal(e.resolve('tipo_dv'), 'd12');
+  assert.equal(e.resolve('tipo_dv_2'), 'd10');
+  assert.equal(e.visible(hd.rows[1].showIf), true);
+  assert.ok(fields.filter((f) => /^(dv|dado_hb)/.test(f.key)).every((f) => f.hidden));
+  // dado cambiato a mano anche per una classe nota: vale finché la classe resta quella
+  const get = (v, k) => new Engine(dnd, v).resolve(k);
+  assert.equal(get({ classe: 'Mago', dado_hb: 'd10', dado_hb_cls: 'Mago' }, 'tipo_dv'), 'd10');
+  assert.equal(get({ classe: 'Barbaro', dado_hb: 'd10', dado_hb_cls: 'Mago' }, 'tipo_dv'), 'd12'); // classe cambiata
+  assert.equal(new Engine(dnd, { classe: 'Mago', dado_hb: 'd10', dado_hb_cls: 'Mago' }).visible(hd.rows[0].changed), true);
+  assert.equal(new Engine(dnd, { classe: 'Mago' }).visible(hd.rows[0].changed), false);
+  // scelta uguale al dado della classe: non conta come modifica
+  assert.equal(new Engine(dnd, { classe: 'Mago', dado_hb: 'd6', dado_hb_cls: 'Mago' }).visible(hd.rows[0].changed), false);
+  // massimo scritto a mano (vuoto = livello della classe)
+  assert.equal(get({ classe: 'Mago', livello: 5 }, 'dv'), 5);
+  assert.equal(get({ classe: 'Mago', livello: 5, dv_tot: 7 }, 'dv'), 7);
+  assert.equal(get({ multiclasse: true, classe_2: 'Ladro', livello_2: 2, dv_tot_2: 3 }, 'dv_2'), 3);
+});
+
+test('lingua inglese: ogni testo dell\'interfaccia ha la traduzione', async () => {
+  const fs = await import('node:fs');
+  const { EN } = await import('../js/i18n-en.js');
+  const dir = new URL('../js/', import.meta.url);
+  const files = [...fs.readdirSync(dir).map((f) => f), ...fs.readdirSync(new URL('views/', dir)).map((f) => `views/${f}`)]
+    .filter((f) => f.endsWith('.js') && !f.startsWith('i18n'));
+  const missing = [];
+  for (const f of files) {
+    const src = fs.readFileSync(new URL(f, dir), 'utf8');
+    for (const m of src.matchAll(/\b(?:t|tr)\(\s*'((?:[^'\\]|\\.)*)'/g)) {
+      const key = m[1].replace(/\\'/g, "'").replace(/\\"/g, '"');
+      if (!(key in EN)) missing.push(`${f}: ${key}`);
+    }
+  }
+  assert.deepEqual(missing, []);
+  // i segnaposto {nome} restano uguali nella traduzione
+  for (const [it, en] of Object.entries(EN)) {
+    if (it.includes('{graffe}')) continue; // spiega la sintassi: qui {…} è testo, non un segnaposto
+    const ph = (s) => [...s.matchAll(/\{(\w+)\}/g)].map((x) => x[1]).sort().join(',');
+    assert.equal(ph(en), ph(it), `segnaposto diversi in: ${it}`);
+  }
+  // le etichette visibili delle schede incluse sono tradotte
+  const { BUILTIN_SYSTEMS } = await import('../js/systems.js');
+  for (const s of BUILTIN_SYSTEMS) {
+    for (const sec of s.sections) {
+      if (sec.title && !/\{/.test(sec.title)) assert.ok(sec.title in EN, `titolo: ${sec.title}`);
+      for (const f of sec.fields || []) if (!f.hidden && f.label && !/\{/.test(f.label)) assert.ok(f.label in EN, `etichetta: ${f.label}`);
+    }
+  }
+});
+
+test('lingua: i valori salvati restano in italiano', async () => {
+  const { t, tValues, toStored } = await import('../js/i18n.js');
+  // nei test (fuori dal browser) la lingua è l'italiano: nessuna traduzione
+  assert.equal(t('Aggiungi riga'), 'Aggiungi riga');
+  assert.equal(t('{n} incantesimi', { n: 3 }), '3 incantesimi');
+  assert.equal(tValues('Privilegi di classe · Mago'), 'Privilegi di classe · Mago');
+  assert.equal(toStored('Mago'), 'Mago');
+});
+
+test('slot incantesimo: numero cambiato a mano', () => {
+  const dnd = BUILTIN_SYSTEMS.find((s) => s.id === 'dnd5e');
+  const sec = dnd.sections.find((s) => s.id === 'magia');
+  assert.ok(sec.editMax);
+  const max = (v, k) => new Engine(dnd, v).resolve(`${k}_max`);
+  assert.equal(max({ classe: 'Mago', livello: 1 }, 'slot_1'), 2);
+  assert.equal(max({ classe: 'Mago', livello: 1, _manuale: { slot_1_max: 3 } }, 'slot_1'), 3);
+  assert.equal(max({ classe: 'Mago', livello: 1, _manuale: { slot_1_max: 30 } }, 'slot_1'), 9); // tetto di 9 per livello
+  // un livello non ancora sbloccato diventa visibile se gli dai degli slot
+  const e = new Engine(dnd, { classe: 'Mago', livello: 1, _manuale: { slot_2_max: 1 } });
+  const f2 = sec.fields.find((f) => f.key === 'slot_2');
+  assert.equal(e.visible(f2.showIf), true);
+  assert.equal(new Engine(dnd, { classe: 'Mago', livello: 1 }).visible(f2.showIf), false);
+});

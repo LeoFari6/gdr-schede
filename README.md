@@ -12,9 +12,11 @@ offline e si installa sul telefono come un'app.
   - **Classe:** si sceglie dall'elenco (le 13 classi) oppure si scrive per una classe homebrew. La
     caratteristica da incantatore si imposta da sola in base alla classe.
   - **Slot e livelli di incantesimo** seguono la tabella della classe (regole 2014); i trucchetti
-    restano sempre visibili. Con una classe homebrew si vede tutto.
-  - **Dadi vita** per classe (d6–d12 in base alla classe), con un contatore separato per la
-    seconda classe se si multiclassa.
+    restano sempre visibili. Con una classe homebrew si vede tutto. Con "Numero di slot" nella
+    sezione Incantesimi si cambia a mano quanti slot ha ogni livello (vuoto = automatico).
+  - **Dadi vita** in un solo riquadro, una riga per classe: il dado (d6–d12) in evidenza, il nome
+    della classe e i dadi rimasti. Il dado si cambia toccandolo (di base è quello della classe; cambiando
+    classe torna quello della nuova) e il numero massimo si può scrivere a mano (vuoto = livello).
   - **Riposi:** *Riposo breve* recupera gli slot del Warlock e gli usi "riposo breve"; *Riposo lungo*
     riporta i PF al massimo, azzera PF temporanei e tiri contro morte, recupera tutti gli slot, tutti
     i dadi vita e gli usi.
@@ -39,6 +41,9 @@ offline e si installa sul telefono come un'app.
   - Testi formattati: si leggono impaginati e un tocco apre la modifica; si scrive con
     `**grassetto**`, `*corsivo*`, righe `- ` per gli elenchi, `# ` per i titoli e `---` per una
     linea di separazione.
+  - **Tabelle nei testi:** "Tabella" mentre scrivi (privilegi, appunti, storia, diario) apre una
+    griglia dove si aggiungono righe e colonne, con l'intestazione facoltativa; la tabella si
+    modifica poi con ✎. Nel testo è scritta come righe `| FOR | DES |`.
   - **Immagini nei testi:** "Aggiungi immagine" mentre scrivi (appunti, storia, diario, privilegi);
     vengono ridotte e salvate a parte nel browser, si aprono a schermo intero con un tocco e
     sono incluse nei file esportati. Con ⤢ sull'immagine se ne sceglie la grandezza (piccola,
@@ -49,6 +54,10 @@ offline e si installa sul telefono come un'app.
   sottolineati con il colore della scheda.
 - **Monete personalizzabili.** Con ⚙ nella sezione Monete si rinominano i tagli e si tengono
   solo quelli che servono (fino a 5).
+- **Ritratto ritagliabile.** Scegliendo l'immagine del personaggio si apre il ritaglio: zoom (cursore,
+  rotellina o due dita) e trascinamento. "Ritaglia" permette di rifarlo dall'immagine originale.
+- **Emoji negli oggetti.** A sinistra del nome di ogni oggetto dell'inventario si può mettere
+  un'emoji (dall'elenco o scritta a mano).
 - **Note a comparsa.** Oggetti dell'inventario, incantesimi e privilegi hanno un pulsante
   📄: la nota si apre in una finestra a comparsa. Il pulsante si colora quando la nota c'è.
 - **Peso e ingombro facoltativi.** Sono disattivati di default; si attivano per ogni
@@ -67,6 +76,10 @@ offline e si installa sul telefono come un'app.
   (sostituendo o aggiungendo solo i nuovi) e lo si esporta. Scrivendo il nome nella scheda
   compaiono i suggerimenti e la riga si compila da sola. L'elenco resta salvato solo sul
   dispositivo: l'app non contiene testi dei manuali.
+- **Italiano e inglese.** Il pulsante IT / EN in alto nella home cambia la lingua (la prima volta
+  segue quella del browser). Si traducono interfaccia e schede incluse; i dati salvati restano
+  gli stessi, quindi un personaggio si apre uguale in entrambe le lingue. I testi scritti da te e
+  i tuoi modelli restano come li hai scritti.
 - **Mobile first.** Layout adattivo, tema chiaro/scuro, installabile (PWA) e utilizzabile offline.
 
 ## Avvio in locale
@@ -100,6 +113,7 @@ js/formula.js           parser di formule (senza eval)
 js/engine.js            motore della scheda: valori derivati, riferimenti, validazione
 js/systems.js           modelli inclusi
 js/store.js             salvataggio in localStorage, import/export
+js/i18n.js              lingua (italiano / inglese); js/i18n-en.js le traduzioni
 js/sheet-render.js      disegno della scheda a partire dal modello
 js/views/               home, scheda personaggio, editor dei modelli
 sw.js, manifest.webmanifest   uso offline e installazione
@@ -107,6 +121,18 @@ docs/FORMATO_MODELLI.md formato JSON dei modelli
 tests/                  test con node:test
 ```
 
+## Creare un modello
+
+Il modo più rapido è duplicare *Generico* dalla home e modificarlo nell'editor.
+Il formato completo, con tutti i tipi di campo e la sintassi delle formule, è descritto in
+[docs/FORMATO_MODELLI.md](docs/FORMATO_MODELLI.md).
+
+## Idee per il futuro
+
+- Sincronizzazione tra dispositivi
+- Condivisione di un personaggio tramite link
+- Galleria di modelli della community
+- Note di sessione e diario del personaggio
 
 ## Note legali
 

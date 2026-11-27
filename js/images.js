@@ -3,6 +3,8 @@
 // nell'IndexedDB del browser, molto più capiente dello spazio delle schede.
 
 // Una larghezza facoltativa in percentuale: "![didascalia](img:ID 50%)".
+import { t } from './i18n.js';
+
 export const IMG_LINE = /^\s*!\[([^\]]*)\]\(img:([\w-]+)(?:\s+(\d{1,3})%)?\)\s*$/;
 const IMG_ANY = /!\[[^\]]*\]\(img:([\w-]+)(?:\s+\d{1,3}%)?\)/g;
 export const IMG_MIN = 15;
@@ -47,7 +49,7 @@ async function run(mode, fn) {
     const req = fn(tx.objectStore(STORE));
     tx.oncomplete = () => resolve(req?.result);
     tx.onerror = () => reject(tx.error);
-    tx.onabort = () => reject(tx.error || new Error('salvataggio dell\'immagine non riuscito'));
+    tx.onabort = () => reject(tx.error || new Error(t('salvataggio dell\'immagine non riuscito')));
   });
 }
 export const putImage = (id, blob) => run('readwrite', (s) => s.put(blob, id));
@@ -60,7 +62,7 @@ export const cachedImageUrl = (id) => urls.get(id) || '';
 export async function imageUrl(id) {
   if (urls.has(id)) return urls.get(id);
   const blob = await getImage(id);
-  if (!blob) throw new Error('immagine non trovata su questo dispositivo');
+  if (!blob) throw new Error(t('immagine non trovata su questo dispositivo'));
   const url = URL.createObjectURL(blob);
   urls.set(id, url);
   return url;
@@ -81,9 +83,9 @@ export function compressImage(file, max = 1600, quality = 0.85) {
       g.fillRect(0, 0, canvas.width, canvas.height);
       g.drawImage(img, 0, 0, canvas.width, canvas.height);
       URL.revokeObjectURL(src);
-      canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('immagine non leggibile'))), 'image/jpeg', quality);
+      canvas.toBlob((b) => (b ? resolve(b) : reject(new Error(t('immagine non leggibile')))), 'image/jpeg', quality);
     };
-    img.onerror = () => { URL.revokeObjectURL(src); reject(new Error('file non riconosciuto come immagine')); };
+    img.onerror = () => { URL.revokeObjectURL(src); reject(new Error(t('file non riconosciuto come immagine'))); };
     img.src = src;
   });
 }

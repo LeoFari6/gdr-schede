@@ -7,6 +7,8 @@
 //   operatori      + - * / % ^   == != < > <= >=   && || !
 //   funzioni       floor ceil round abs min max clamp sum count avg if concat pick
 
+import { t } from './i18n.js';
+
 export class FormulaError extends Error {
   constructor(message) {
     super(message);
@@ -61,7 +63,7 @@ export function tokenize(src) {
       i += 1;
       continue;
     }
-    throw new FormulaError(`Carattere non valido "${c}"`);
+    throw new FormulaError(t('Carattere non valido "{c}"', { c }));
   }
   return tokens;
 }
@@ -73,7 +75,7 @@ export function parse(src) {
   const peek = () => tokens[pos];
   const isOp = (...vs) => peek()?.t === 'op' && vs.includes(peek().v);
   const expect = (v) => {
-    if (!isOp(v)) throw new FormulaError(`Manca "${v}"`);
+    if (!isOp(v)) throw new FormulaError(t('Manca "{v}"', { v }));
     pos++;
   };
 
@@ -88,7 +90,7 @@ export function parse(src) {
 
   const parsePrimary = () => {
     const tk = tokens[pos++];
-    if (!tk) throw new FormulaError('Espressione incompleta');
+    if (!tk) throw new FormulaError(t('Espressione incompleta'));
     switch (tk.t) {
       case 'num': return { k: 'num', v: tk.v };
       case 'str': return { k: 'str', v: tk.v };
@@ -98,9 +100,9 @@ export function parse(src) {
         if (name === 'true') return { k: 'num', v: 1 };
         if (name === 'false') return { k: 'num', v: 0 };
         if (!isOp('(')) {
-          throw new FormulaError(`Nome sconosciuto "${tk.v}" (i riferimenti ai campi iniziano con @)`);
+          throw new FormulaError(t('Nome sconosciuto "{v}" (i riferimenti ai campi iniziano con @)', { v: tk.v }));
         }
-        if (!(name in FUNCTIONS)) throw new FormulaError(`Funzione sconosciuta "${tk.v}"`);
+        if (!(name in FUNCTIONS)) throw new FormulaError(t('Funzione sconosciuta "{v}"', { v: tk.v }));
         pos++;
         const args = [];
         if (!isOp(')')) {
@@ -117,7 +119,7 @@ export function parse(src) {
           return e;
         }
     }
-    throw new FormulaError(`Simbolo inatteso "${tk.v}"`);
+    throw new FormulaError(t('Simbolo inatteso "{v}"', { v: tk.v }));
   };
 
   const parsePow = () => {
@@ -142,7 +144,7 @@ export function parse(src) {
   const parseOr = binaryLevel(['||'], parseAnd);
 
   const ast = parseOr();
-  if (pos < tokens.length) throw new FormulaError(`Simbolo inatteso "${tokens[pos].v}"`);
+  if (pos < tokens.length) throw new FormulaError(t('Simbolo inatteso "{v}"', { v: tokens[pos].v }));
   return ast;
 }
 
@@ -183,7 +185,7 @@ export function isTruthy(v) {
 }
 
 export function evaluate(ast, ctx = {}) {
-  const resolve = ctx.resolve || ((name) => { throw new FormulaError(`Campo @${name} inesistente`); });
+  const resolve = ctx.resolve || ((name) => { throw new FormulaError(t('Campo @{nome} inesistente', { nome: name })); });
   const ev = (n) => {
     switch (n.k) {
       case 'num':
@@ -221,17 +223,17 @@ export function evaluate(ast, ctx = {}) {
           case '<=': return x <= y ? 1 : 0;
           case '>=': return x >= y ? 1 : 0;
         }
-        throw new FormulaError(`Operatore sconosciuto ${n.op}`);
+        throw new FormulaError(t('Operatore sconosciuto {op}', { op: n.op }));
       }
       case 'call': {
         if (n.name === 'if') {
-          if (n.args.length < 2) throw new FormulaError('if(condizione, se_vero, se_falso)');
+          if (n.args.length < 2) throw new FormulaError(t('if(condizione, se_vero, se_falso)'));
           return isTruthy(ev(n.args[0])) ? ev(n.args[1]) : (n.args[2] ? ev(n.args[2]) : 0);
         }
         return FUNCTIONS[n.name](...n.args.map(ev));
       }
     }
-    throw new FormulaError('Espressione non valida');
+    throw new FormulaError(t('Espressione non valida'));
   };
   return ev(ast);
 }

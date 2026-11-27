@@ -2,6 +2,8 @@
 // Resta salvato solo su questo dispositivo (a parte rispetto ai personaggi):
 // l'app non contiene testi dei manuali, li porta l'utente con il proprio file.
 
+import { t } from './i18n.js';
+
 const KEY = 'gdr-schede/incantesimi';
 
 // Nomi di colonna accettati (inglese o italiano, maiuscole indifferenti).
@@ -66,10 +68,10 @@ const yes = (v) => /^(1|true|yes|si|sì|x)$/i.test(String(v ?? '').trim());
 /** Trasforma il CSV in un elenco di incantesimi. Lancia un errore se manca la colonna del nome. */
 export function spellsFromCSV(text) {
   const [header, ...rows] = parseCSV(text);
-  if (!header) throw new Error('il file è vuoto');
+  if (!header) throw new Error(t('il file è vuoto'));
   const norm = header.map((h) => h.trim().toLowerCase());
   const idx = Object.fromEntries(Object.entries(COLUMNS).map(([k, names]) => [k, norm.findIndex((h) => names.includes(h))]));
-  if (idx.name < 0) throw new Error('manca la colonna con il nome (name o nome)');
+  if (idx.name < 0) throw new Error(t('manca la colonna con il nome (name o nome)'));
   const get = (r, k) => (idx[k] >= 0 ? String(r[idx[k]] ?? '').trim() : '');
   const out = [];
   for (const r of rows) {
@@ -97,7 +99,7 @@ export function spellsFromCSV(text) {
       classes: get(r, 'classes').toLowerCase().split(/[,;/]/).map((x) => x.trim()).filter(Boolean),
     });
   }
-  if (!out.length) throw new Error('nessun incantesimo trovato nel file');
+  if (!out.length) throw new Error(t('nessun incantesimo trovato nel file'));
   return out;
 }
 
@@ -114,7 +116,7 @@ export function saveSpells(list) {
   try {
     globalThis.localStorage.setItem(KEY, JSON.stringify(list));
   } catch {
-    throw new Error('spazio di archiviazione del browser esaurito');
+    throw new Error(t('spazio di archiviazione del browser esaurito'));
   }
   cache = list;
 }
