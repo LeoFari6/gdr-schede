@@ -57,7 +57,16 @@ export const store = {
   system(id) { return BUILTIN_SYSTEMS.find((s) => s.id === id) || null; },
 
   // ---- personaggi ----------------------------------------------------
-  characters() { return [...state.characters].sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0)); },
+  // prima i personaggi fissati in cima, poi gli altri; dentro ciascun gruppo i più recenti
+  characters() { return [...state.characters].sort((a, b) => (!!b.pinned - !!a.pinned) || (b.updatedAt || 0) - (a.updatedAt || 0)); },
+
+  /** Fissa o sgancia un personaggio in cima alla lista (senza cambiarne la data di modifica). */
+  setPinned(id, pinned) {
+    const c = this.character(id);
+    if (!c) return;
+    if (pinned) c.pinned = true; else delete c.pinned;
+    persist();
+  },
   character(id) { return state.characters.find((c) => c.id === id) || null; },
 
   createCharacter(systemId, name) {

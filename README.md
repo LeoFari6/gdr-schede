@@ -1,7 +1,7 @@
 # Schede GdR
 
 Schede personaggio per **D&D 5ª edizione** e **Cyberpunk RED**, pensate per giocare
-dal vivo al tavolo. C'è anche un tiro di dadi digitale, per quando servono.
+dal vivo al tavolo (i dadi si tirano veri: l'app non ha tiri digitali).
 Una web app statica, senza server e senza dipendenze: si apre nel browser, funziona
 offline e si installa sul telefono come un'app.
 
@@ -52,6 +52,12 @@ offline e si installa sul telefono come un'app.
   - **Tabelle nei testi:** "Tabella" mentre scrivi (privilegi, appunti, storia, diario) apre una
     griglia dove si aggiungono righe e colonne, con l'intestazione facoltativa; la tabella si
     modifica poi con ✎. Nel testo è scritta come righe `| FOR | DES |`.
+  - **Audio nelle note:** una sezione per caricare file audio (fino a 10 MB ciascuno: musiche, effetti,
+    registrazioni), ognuno con il suo lettore; si possono rinominare ed eliminare e sono inclusi nei
+    file esportati. Restano salvati nel browser, come le immagini. Con "Taglia" scegli inizio e fine
+    sulla forma d'onda: il lettore suona solo quella parte, il file originale resta intatto e puoi
+    sempre tornare all'audio intero. Nella finestra di taglio la barra bianca indica da dove parte
+    l'ascolto: si trascina dal pallino in alto e in pausa si torna sempre lì.
   - **Immagini nei testi:** "Aggiungi immagine" mentre scrivi (appunti, storia, diario, privilegi);
     vengono ridotte e salvate a parte nel browser, si aprono a schermo intero con un tocco e
     sono incluse nei file esportati. Con ⤢ sull'immagine se ne sceglie la grandezza (piccola,
@@ -62,10 +68,7 @@ offline e si installa sul telefono come un'app.
   attuale, punti fortuna, armatura (SP di testa e corpo che si consuma), armi con il tiro calcolato,
   ferite critiche, cyberware con la perdita di umanità, equipaggiamento, netrunning (per i Netrunner),
   lifepath, appunti e diario.
-- **Tira i dadi.** Il pulsante con il dado in alto nella scheda: tocchi i dadi da aggiungere (anche
-  di tipi diversi, es. 2d20 + 1d6, fino a 20 in tutto), un modificatore; i dadi rotolano e si fermano sul risultato, con il totale e gli ultimi tiri. Sul d20
-  il 20 naturale si colora di verde e l'1 di rosso scuro. Toccando uno o più dadi tirati li selezioni e con
-  "Ritira" li rilanci (il totale si aggiorna).
+
 - **Valori a mano.** Ogni valore calcolato (iniziativa, competenza, modificatori, abilità, CD…)
   si tocca e si può scrivere a mano; "Automatico" torna al calcolo. I valori a mano sono
   sottolineati con il colore della scheda.
@@ -77,9 +80,12 @@ offline e si installa sul telefono come un'app.
   un'emoji (dall'elenco o scritta a mano).
 - **Note a comparsa.** Oggetti dell'inventario, incantesimi e privilegi hanno un pulsante
   📄: la nota si apre in una finestra a comparsa. Il pulsante si colora quando la nota c'è.
+- **Home ordinata.** Si vedono al massimo 5 personaggi (gli altri con "Mostra tutti"); dal menu ⋯ di
+  un personaggio lo si può fissare in cima alla lista.
 - **Peso e ingombro facoltativi.** Sono disattivati di default; si attivano per ogni
   personaggio dal menu ⋯ della scheda (*Attiva peso e ingombro*).
-- **Due schede incluse.** D&D 5ª edizione (in evidenza nella home) e Cyberpunk RED. Non si creano
+- **Due schede incluse.** D&D 5ª edizione e Cyberpunk RED, una sotto l'altra nella home. Dal menu ⋯
+  della scheda D&D si apre l'elenco degli incantesimi importati. Non si creano
   né si modificano altri modelli di scheda: si usano solo quelli inclusi nell'app.
 - **Portabile.** Salvataggio automatico nel browser; esporta e importa personaggi o un backup
   completo in JSON.
@@ -129,6 +135,7 @@ js/systems.js           le schede incluse (D&D 5e, Cyberpunk RED)
 js/store.js             salvataggio in localStorage, import/export
 js/i18n.js              lingua (italiano / inglese); js/i18n-en.js le traduzioni
 js/sheet-render.js      disegno della scheda a partire dal modello
+js/audio-trim.js        taglio degli audio delle note (inizio e fine, senza toccare il file)
 js/views/               home, scheda personaggio, elenco incantesimi
 sw.js, manifest.webmanifest   uso offline e installazione
 tests/                  test con node:test

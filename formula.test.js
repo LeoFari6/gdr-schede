@@ -603,31 +603,29 @@ test('riposo breve: dadi vita spesi per recuperare PF', async () => {
   assert.equal(spendHitDice(dnd, v, [{ key: 'dv', n: 9, roll: 30 }]).changes.dv, 0);
 });
 
-test('tiro di dadi: risultati nel dado giusto, quantità limitata, modificatore', async () => {
-  globalThis.document ??= { addEventListener() {} };
-  const { roll, rollDie, MAX_DICE, DICE } = await import('../js/dice.js');
-  for (const d of DICE) {
-    const seen = new Set();
-    for (let i = 0; i < 4000; i++) { const v = rollDie(d); assert.ok(v >= 1 && v <= d, `d${d}: ${v}`); seen.add(v); }
-    if (d <= 20) assert.equal(seen.size, d, `d${d}: escono tutte le facce`);
+test('audio nelle note: sezione nelle schede e file inclusi nelle esportazioni', () => {
+  for (const s of BUILTIN_SYSTEMS) {
+    const f = s.sections.find((x) => x.id === 'audio')?.fields[0];
+    assert.equal(f?.type, 'audio', s.name);
+    assert.equal(s.sections.find((x) => x.id === 'audio').tab, 'Note');
   }
-  const r = roll(6, 99, 3);
-  assert.equal(r.rolls.length, MAX_DICE);
-  assert.equal(r.total, r.rolls.reduce((a, b) => a + b, 0) + 3);
-  assert.equal(roll(20, 0).rolls.length, 1);
+  // gli ID dei file audio si raccolgono come quelli delle immagini (per il backup)
+  const ids = imageIdsIn({ audio: [{ audioId: 'a1x', nome: 'Taverna' }], note: '![](img:i2y)' });
+  assert.deepEqual([...ids].sort(), ['a1x', 'i2y']);
+  const dnd = BUILTIN_SYSTEMS.find((s) => s.id === 'dnd5e');
+  assert.equal(new Engine(dnd, { audio: [{ audioId: 'a1' }, { audioId: 'a2' }] }).resolve('audio'), 2);
 });
 
-test('tiro di dadi diversi insieme (max 20 in tutto)', async () => {
+test('audio: taglio non distruttivo (inizio e fine)', async () => {
   globalThis.document ??= { addEventListener() {} };
-  const { normalizePool, poolFormula, rollPool, MAX_DICE } = await import('../js/dice.js');
-  assert.deepEqual(normalizePool([{ sides: 6, count: 1 }, { sides: 20, count: 2 }, { sides: 6, count: 2 }, { sides: 7, count: 3 }, { sides: 8, count: 0 }]),
-    [{ sides: 20, count: 2 }, { sides: 6, count: 3 }]);
-  assert.equal(poolFormula([{ sides: 20, count: 2 }, { sides: 6, count: 1 }], 3), '2d20 + 1d6 + 3');
-  assert.equal(poolFormula([{ sides: 8, count: 1 }], -2), '1d8 − 2');
-  const capped = normalizePool([{ sides: 20, count: 15 }, { sides: 6, count: 15 }]);
-  assert.equal(capped.reduce((a, g) => a + g.count, 0), MAX_DICE);
-  const r = rollPool([{ sides: 20, count: 2 }, { sides: 4, count: 3 }], 1);
-  assert.equal(r.dice.length, 5);
-  assert.ok(r.dice.every((d) => d.v >= 1 && d.v <= d.sides));
-  assert.equal(r.total, r.dice.reduce((a, d) => a + d.v, 0) + 1);
+  const { trimRange, trimToStore, fmtTime } = await import('../js/audio-trim.js');
+  assert.deepEqual(trimRange({}, 60), { start: 0, end: 60, len: 60, cut: false });
+  assert.deepEqual(trimRange({ da: 10, a: 25 }, 60), { start: 10, end: 25, len: 15, cut: true });
+  assert.equal(trimRange({ a: 999 }, 60).end, 60); // fine oltre la durata → fino in fondo
+  assert.equal(trimRange({ da: 20, a: 20 }, 60).len, 0.5); // durata minima
+  assert.equal(trimRange({ da: 10 }, NaN).start, 10); // durata non ancora nota
+  assert.deepEqual(trimToStore(0, 60, 60), { da: undefined, a: undefined });
+  assert.deepEqual(trimToStore(3.14, 42.06, 60), { da: 3.1, a: 42.1 });
+  assert.equal(fmtTime(75), '1:15');
+  assert.equal(fmtTime(5.25, true), '0:05.3');
 });

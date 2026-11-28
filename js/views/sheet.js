@@ -2,14 +2,13 @@ import { h, icon, toast, confirmDialog, download, menuButton, slugify } from '..
 import { store } from '../store.js';
 import { hasWeight, weightEnabled, allFields, applyRest } from '../engine.js';
 import { renderSheet } from '../sheet-render.js';
-import { toggleTheme, applyAccent, pickAccent } from '../theme.js';
+import { themeToggle, applyAccent, pickAccent } from '../theme.js';
 import { openSpellList } from './spell-list.js';
 import { withImages } from '../images.js';
 import { openImageViewer } from '../richtext.js';
 import { t } from '../i18n.js';
 import { runLevelUp, runLevelDown } from '../levelup.js';
 import { showRestRecap, askHitDice } from '../rest.js';
-import { openDiceRoller } from '../dice.js';
 
 // Tab aperta per ogni personaggio, per ritrovarla dopo un ridisegno.
 const lastTab = new Map();
@@ -87,6 +86,9 @@ export function renderCharacter(root, id) {
   const nameInput = h('input', {
     class: 'title-input', value: c.name, 'aria-label': t('Nome del personaggio'),
     oninput: (e) => { store.updateCharacter(c.id, { name: e.target.value }); document.title = `${e.target.value} · ${t('Schede GdR')}`; fitName(); },
+    // nome lasciato vuoto: torna "Senza nome"
+    onblur: (e) => { if (!e.target.value.trim()) { e.target.value = t('Senza nome'); store.updateCharacter(c.id, { name: e.target.value }); fitName(); } },
+    onkeydown: (e) => { if (e.key === 'Enter') e.target.blur(); },
   });
 
   // ritratto in un cerchio a sinistra del nome (il primo campo immagine della scheda)
@@ -164,7 +166,8 @@ export function renderCharacter(root, id) {
     h('a', { href: '#/', class: 'btn ghost sq', 'aria-label': t('Indietro'), title: t('Tutti i personaggi') }, icon('back')),
     h('div', { class: 'title-wrap' }, portrait, nameInput, h('span', { class: 'chip' }, t(sys.name))),
     h('div', { class: 'topbar-actions' },
-      h('button', { type: 'button', class: 'btn ghost sq', title: t('Tira i dadi'), 'aria-label': t('Tira i dadi'), onclick: () => openDiceRoller() }, icon('dice')),
+      h('button', { type: 'button', class: 'btn ghost sq', title: t('Colore della scheda'), 'aria-label': t('Colore della scheda'), onclick: chooseColor }, icon('palette')),
+      themeToggle(),
       menuButton([
         sys.levelUp ? { label: t('Sali di livello'), icon: 'up', onClick: async () => {
           const r = await runLevelUp(sys, store.character(c.id).values, (k, v) => store.setValue(c.id, k, v), redraw);
@@ -176,9 +179,6 @@ export function renderCharacter(root, id) {
         usesSpellList ? { label: t('Elenco incantesimi'), icon: 'book', onClick: openSpellList } : null,
         ...menuToggles,
         hasWeight(sys) ? { label: weightOn ? t('Disattiva peso e ingombro') : t('Attiva peso e ingombro'), icon: 'weight', onClick: toggleWeight } : null,
-        // colore secondario e tema chiaro/scuro stanno nel menu, così la barra resta libera per il nome
-        { label: t('Colore della scheda'), icon: 'palette', onClick: chooseColor },
-        { label: document.documentElement.dataset.theme === 'dark' ? t('Tema chiaro') : t('Tema scuro'), icon: document.documentElement.dataset.theme === 'dark' ? 'sun' : 'moon', onClick: () => { toggleTheme(); redraw(); } },
         { label: t('Esporta (.json)'), icon: 'download', onClick: async () => { download(`${slugify(c.name)}.json`, await withImages(store.exportCharacter(c.id))); toast(t('Scheda esportata')); } },
         { label: t('Stampa / PDF'), icon: 'print', onClick: () => { buildPrint(); window.print(); } },
         { label: t('Duplica'), icon: 'copy', onClick: () => { const d = store.duplicateCharacter(c.id); location.hash = `#/c/${d.id}`; } },
@@ -191,5 +191,9 @@ export function renderCharacter(root, id) {
 
   root.append(header, h('main', { class: 'sheet-main' }, sheet.el));
   requestAnimationFrame(fitName);
+  // personaggio appena creato: il nome è già selezionato, basta scrivere
+  let fresh = false;
+  try { fresh = sessionStorage.getItem('gdr-schede/nuovo') === c.id; if (fresh) sessionStorage.removeItem('gdr-schede/nuovo'); } catch { /* niente */ }
+  if (fresh) requestAnimationFrame(() => { nameInput.focus(); nameInput.select(); });
   document.fonts?.ready.then(fitName); // il carattere della scheda può arrivare dopo
 }

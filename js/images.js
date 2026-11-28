@@ -23,7 +23,10 @@ export function setImageSize(text, id, pct) {
 export function imageIdsIn(value, out = new Set()) {
   if (typeof value === 'string') for (const m of value.matchAll(IMG_ANY)) out.add(m[1]);
   else if (Array.isArray(value)) value.forEach((v) => imageIdsIn(v, out));
-  else if (value && typeof value === 'object') Object.values(value).forEach((v) => imageIdsIn(v, out));
+  else if (value && typeof value === 'object') {
+    if (typeof value.audioId === 'string' && /^[\w-]+$/.test(value.audioId)) out.add(value.audioId); // file audio delle note
+    Object.values(value).forEach((v) => imageIdsIn(v, out));
+  }
   return out;
 }
 
@@ -121,7 +124,7 @@ export async function withImages(data) {
 export async function importImages(images) {
   let n = 0;
   for (const [id, dataUrl] of Object.entries(images || {})) {
-    if (!/^[\w-]+$/.test(id) || typeof dataUrl !== 'string' || !dataUrl.startsWith('data:image/')) continue;
+    if (!/^[\w-]+$/.test(id) || typeof dataUrl !== 'string' || !/^data:(image|audio)\//.test(dataUrl)) continue; // immagini e audio delle note
     const blob = await (await fetch(dataUrl)).blob();
     await putImage(id, blob);
     n++;

@@ -18,7 +18,8 @@ function route() {
   store.flush();
   const parts = (location.hash.replace(/^#\/?/, '') || '').split('/').filter(Boolean);
   root.replaceChildren();
-  document.querySelectorAll('dialog, .suggest, .death, .viewer, .emoji-pop').forEach((d) => d.remove());
+  document.querySelectorAll('dialog, .suggest, .viewer, .emoji-pop').forEach((d) => d.remove());
+  document.dispatchEvent(new CustomEvent('gdr-audio-play', { detail: null })); // cambiando pagina si ferma l'audio
   document.title = t('Schede GdR');
   applyAccent(document.documentElement, null);
   window.scrollTo(0, 0);

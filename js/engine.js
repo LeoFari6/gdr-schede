@@ -21,6 +21,7 @@ export const FIELD_TYPES = {
   deathsaves: { label: 'Tiri contro morte (successi e fallimenti)' },
   hitdice: { label: 'Dadi vita (una riga per classe)' },
   features: { label: 'Privilegi (voci richiudibili con usi)' },
+  audio: { label: 'File audio' },
   image: { label: 'Immagine' },
 };
 
@@ -42,7 +43,7 @@ export function defaultValue(f) {
   switch (f.type) {
     case 'number': case 'stat': case 'dots': case 'skill': return 0;
     case 'checkbox': return false;
-    case 'list': case 'features': return [];
+    case 'list': case 'features': case 'audio': return [];
     case 'resource': return null; // null = pari al massimo
     case 'select': return f.options?.[0] ?? '';
     default: return '';
@@ -138,7 +139,7 @@ export class Engine {
         const v = this.raw(f);
         return v === null || v === '' || v === undefined ? this.max(f) : toNum(v);
       }
-      case 'list': case 'features': return (this.raw(f) || []).length;
+      case 'list': case 'features': case 'audio': return (this.raw(f) || []).length;
       case 'number': case 'stat': case 'dots': return toNum(this.raw(f));
       case 'checkbox': return this.raw(f) ? 1 : 0;
       case 'image': return 0;

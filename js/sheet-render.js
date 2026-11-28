@@ -1,12 +1,13 @@
 // Disegna una scheda a partire da un modello e dai valori di un personaggio.
 // Usato dalla vista "scheda" e dalla stampa.
-import { h, icon, toast, pickFile, readImageResized, modal, confirmDialog, holdRepeat } from './ui.js';
+import { h, icon, toast, pickFile, readImageResized, modal, confirmDialog, holdRepeat, menuButton } from './ui.js';
 import { Engine, allFields, defaultValue, weightEnabled, normalizeFeature, normalizeCounter, counterMax, RECHARGE, MAX_USES } from './engine.js';
 import { toNum, formatValue, interpolate } from './formula.js';
 import { richText, autoGrow, FORMAT_HINT, plainText, editTableDialog, tableToText, replaceTable } from './richtext.js';
 import { loadSpells, searchSpells } from './spells.js';
-import { addImageFromFile, setImageSize, compressImage, putImage, getImage, newImageId } from './images.js';
+import { addImageFromFile, setImageSize, compressImage, putImage, getImage, newImageId, imageUrl } from './images.js';
 import { cropImage } from './cropper.js';
+import { trimAudio, trimRange, fmtTime } from './audio-trim.js';
 import { openSpellList } from './views/spell-list.js';
 import { t as tr, tValues, toStored, locale } from './i18n.js';
 
@@ -166,7 +167,7 @@ function dragBar(bar, f, ctx, tempVal) {
 // valuta una formula qualsiasi (es. il nome di una classe) con i valori della scheda
 const evalName = (eng, src) => interpolate(`{${src}}`, eng.resolver()).trim();
 
-const WIDE = new Set(['textarea', 'richtext', 'list', 'features']);
+const WIDE = new Set(['textarea', 'richtext', 'list', 'features', 'audio']);
 
 function renderField(f, ctx, cols, tiles = false, sid = null) {
   const span = Math.min(cols, Math.max(1, Number(f.span) || (WIDE.has(f.type) ? cols : 1)));
@@ -374,6 +375,9 @@ const FIELD_RENDERERS = {
       const cur = eng.safe(() => eng.value(f));
       const mx = eng.safe(() => eng.max(f));
       if (document.activeElement !== input) input.value = cur.ok ? cur.value : '';
+      // i campi sono larghi quanto le cifre (anche con PF a 3–4 cifre su schermi stretti)
+      const digits = Math.max(2, String(cur.ok ? cur.value : '').length, String(mx.ok ? formatValue(mx.value) : '').length);
+      input.parentElement?.style.setProperty('--digits', String(digits));
       if (maxText) {
         maxText.textContent = mx.ok ? `/ ${formatValue(mx.value)}` : '/ ⚠';
         maxText.title = mx.ok ? '' : mx.error;
@@ -397,6 +401,130 @@ const FIELD_RENDERERS = {
         holdRepeat(h('button', { type: 'button', class: 'btn sq hold', 'aria-label': tr('Aumenta') }, '+'), () => step(1)),
         h('button', { type: 'button', class: 'btn ghost sq small', title: tr('Riporta al massimo'), onclick: () => ctx.set(f.key, undefined) }, '↺')),
       ctx.print ? bar : dragBar(bar, f, ctx, tempKey ? tempVal : null)));
+  },
+
+  // File audio (es. musiche o effetti nelle note): salvati nel browser come le immagini, con un
+  // piccolo lettore per ognuno (play/pausa, avanzamento, durata), rinomina ed elimina.
+  audio(f, ctx, wrap) {
+    const MAX_MB = 10;
+    const box = h('div', { class: 'audio-list' });
+    const items = () => (Array.isArray(raw(f, ctx)) ? raw(f, ctx) : []);
+    const save = (next) => { ctx.set(f.key, next.length ? next : undefined); draw(); };
+    let players = []; // lettori attuali: si chiudono quando la lista si ridisegna
+    const fmt = (s) => fmtTime(s);
+    const add = async () => {
+      const file = await pickFile('audio/*');
+      if (!file) return;
+      if (!/^audio\//.test(file.type) && !/\.(mp3|m4a|aac|wav|ogg|oga|opus|flac|webm)$/i.test(file.name)) { toast(tr('Il file non è un audio'), 'error'); return; }
+      if (file.size > MAX_MB * 1024 * 1024) { toast(tr('File troppo pesante: massimo {n} MB', { n: MAX_MB }), 'error', 4500); return; }
+      const id = `a${newImageId().slice(1)}`;
+      try { await putImage(id, file); } catch (e) { toast(tr('Audio non salvato: {err}', { err: e.message }), 'error', 5000); return; }
+      save([...items(), { audioId: id, nome: file.name.replace(/\.[^.]+$/, ''), size: file.size }]);
+      toast(tr('Audio aggiunto'), 'ok');
+    };
+    const row = (it, i) => {
+      const audio = new Audio();
+      audio.preload = 'metadata';
+      const playBtn = h('button', { type: 'button', class: 'audio-play', 'aria-label': tr('Riproduci') }, icon('play'));
+      const seek = h('input', { type: 'range', class: 'audio-seek', min: 0, max: 1000, value: 0, step: 1, 'aria-label': tr('Posizione') });
+      const time = h('span', { class: 'audio-time' }, '0:00');
+      const name = h('span', { class: 'audio-name' }, it.nome || tr('Senza nome'));
+      let ready = false;
+      const load = async () => {
+        if (ready) return true;
+        try { audio.src = await imageUrl(it.audioId); ready = true; return true; } catch { el.classList.add('audio-missing'); toast(tr('Audio non disponibile su questo dispositivo'), 'error'); return false; }
+      };
+      // solo la parte scelta col taglio (da → a); tempi mostrati relativi all'inizio
+      const part = () => trimRange(it, audio.duration);
+      const sync = () => {
+        const { start, end, len, cut } = part();
+        const known = Number.isFinite(audio.duration) && audio.duration > 0;
+        const cur = Math.max(0, Math.min(len, audio.currentTime - start));
+        time.textContent = `${fmt(known ? cur : NaN)} / ${fmt(known ? len : NaN)}`;
+        el.classList.toggle('audio-cut', known && cut);
+        if (known && document.activeElement !== seek) seek.value = String(Math.round((cur / len) * 1000));
+        if (known && !audio.paused && audio.currentTime >= end) { audio.pause(); audio.currentTime = start; }
+        el.classList.toggle('playing', !audio.paused);
+        playBtn.replaceChildren(icon(audio.paused ? 'play' : 'pause'));
+        playBtn.setAttribute('aria-label', audio.paused ? tr('Riproduci') : tr('Pausa'));
+      };
+      playBtn.addEventListener('click', async () => {
+        if (!(await load())) return;
+        if (audio.paused) {
+          const { start, end } = part();
+          if (audio.currentTime < start || audio.currentTime >= end - 0.05) audio.currentTime = start;
+          document.dispatchEvent(new CustomEvent('gdr-audio-play', { detail: audio })); // gli altri audio si fermano
+          audio.play().catch(() => toast(tr('Questo audio non si può riprodurre'), 'error'));
+        } else audio.pause();
+      });
+      // un solo audio alla volta
+      const stopOthers = (e) => { if (e.detail !== audio && !audio.paused) audio.pause(); };
+      document.addEventListener('gdr-audio-play', stopOthers);
+      players.push(() => { audio.pause(); audio.removeAttribute('src'); document.removeEventListener('gdr-audio-play', stopOthers); });
+      seek.addEventListener('input', async () => { if (!(await load())) return; if (Number.isFinite(audio.duration)) { const { start, len } = part(); audio.currentTime = start + (Number(seek.value) / 1000) * len; } });
+      ['timeupdate', 'loadedmetadata', 'play', 'pause', 'ended'].forEach((ev) => audio.addEventListener(ev, sync));
+      audio.addEventListener('ended', () => { audio.currentTime = part().start; sync(); });
+      // con l'audio tagliato timeupdate è troppo lento: si controlla la fine a ogni fotogramma
+      let raf = 0;
+      const watch = () => { sync(); if (!audio.paused) raf = requestAnimationFrame(watch); };
+      audio.addEventListener('play', () => { if (part().cut) raf = requestAnimationFrame(watch); });
+      audio.addEventListener('pause', () => cancelAnimationFrame(raf));
+      const trim = async () => {
+        audio.pause();
+        let blob;
+        try { blob = await getImage(it.audioId); } catch { blob = null; }
+        if (!blob) { toast(tr('Audio non disponibile su questo dispositivo'), 'error'); return; }
+        let r;
+        try { r = await trimAudio(blob, it); } catch (e) { toast(e.message, 'error'); return; }
+        if (!r) return;
+        const next = [...items()];
+        const { da, a, ...rest } = next[i]; // eslint-disable-line no-unused-vars
+        next[i] = { ...rest, ...(r.da !== undefined ? { da: r.da } : {}), ...(r.a !== undefined ? { a: r.a } : {}) };
+        save(next);
+        toast(r.da !== undefined || r.a !== undefined ? tr('Audio tagliato') : tr('Audio intero ripristinato'), 'ok');
+      };
+      const rename = async () => {
+        const input = h('input', { class: 'input', type: 'text', value: it.nome || '' });
+        const r = await modal({ title: tr('Rinomina audio'), body: h('label', { class: 'stack' }, h('span', { class: 'lbl' }, tr('Nome')), input),
+          actions: [{ label: tr('Annulla'), value: null }, { label: tr('Salva'), value: 'ok', cls: 'primary' }] });
+        if (r !== 'ok') return;
+        const next = [...items()]; next[i] = { ...next[i], nome: input.value.trim() || it.nome }; save(next);
+      };
+      const remove = async () => {
+        if (!(await confirmDialog(tr('Eliminare l\'audio?'), tr('"{nome}" verrà tolto dalle note.', { nome: it.nome || tr('Senza nome') }), tr('Elimina'), true))) return;
+        audio.pause();
+        document.removeEventListener('gdr-audio-play', stopOthers);
+        save(items().filter((_, j) => j !== i));
+      };
+      const el = h('div', { class: 'audio-row' },
+        playBtn,
+        h('div', { class: 'audio-main' }, h('div', { class: 'audio-head' }, name, time), seek),
+        // pulsanti in fila; sugli schermi stretti diventano un menu ⋯
+        ctx.print ? null : h('div', { class: 'audio-acts' },
+          h('button', { type: 'button', class: 'btn ghost sq small', title: tr('Taglia'), 'aria-label': tr('Taglia'), onclick: trim }, icon('cut')),
+          h('button', { type: 'button', class: 'btn ghost sq small', title: tr('Rinomina'), 'aria-label': tr('Rinomina'), onclick: rename }, icon('edit')),
+          h('button', { type: 'button', class: 'btn ghost sq small danger', title: tr('Elimina'), 'aria-label': tr('Elimina'), onclick: remove }, icon('trash'))),
+        ctx.print ? null : h('div', { class: 'audio-more' }, menuButton([
+          { label: tr('Taglia'), icon: 'cut', onClick: trim },
+          { label: tr('Rinomina'), icon: 'edit', onClick: rename },
+          { label: tr('Elimina'), icon: 'trash', danger: true, onClick: remove },
+        ], { title: tr('Azioni per {nome}', { nome: it.nome || tr('Senza nome') }) })));
+      // durata appena possibile, senza far partire l'audio
+      load().then((ok) => ok && sync());
+      return el;
+    };
+    const draw = () => {
+      players.forEach((stop) => stop());
+      players = [];
+      const list = items();
+      box.replaceChildren(...[
+        ...list.map(row),
+        list.length ? null : h('p', { class: 'muted small feats-empty' }, tr(f.placeholder) || tr('Nessun audio.')),
+        ctx.print ? null : h('button', { type: 'button', class: 'btn small add-row', onclick: add }, icon('music'), h('span', {}, tr('Carica audio'))),
+      ].filter(Boolean));
+    };
+    draw();
+    wrap.append(h('div', { class: 'stack' }, f.label ? label(f) : null, box));
   },
 
   // Tiri contro morte: successi (verdi) e fallimenti (rossi). Con 3 successi il
@@ -493,6 +621,7 @@ const FIELD_RENDERERS = {
     const cur = (k) => Math.max(0, Math.min(3, toNum(ctx.values[k] ?? 0)));
     const reset = () => { ctx.set(okKey, undefined); ctx.set(koKey, undefined); };
     const tap = (key, i) => {
+      if (box.classList.contains('ds-dead') || box.classList.contains('ds-stable')) return; // durante l'animazione
       const next = cur(key) === i + 1 ? i : i + 1;
       ctx.set(key, next || undefined);
       if (next < 3 || ctx.print) return;
@@ -500,7 +629,13 @@ const FIELD_RENDERERS = {
         box.classList.add('ds-stable');
         toast(tr('Stabilizzato: i tiri contro morte si azzerano'), 'ok', 3000);
         setTimeout(() => { box.classList.remove('ds-stable'); reset(); }, 900);
-      } else deathScreen(reset);
+      } else {
+        // tre fallimenti: al posto dei pallini spuntano tre teschietti, poi tutto si azzera
+        box.classList.add('ds-dead');
+        ko.dots.forEach((d, i) => setTimeout(() => d.replaceChildren(skullIcon()), i * 160));
+        toast(tr('Tre fallimenti: il personaggio è morto. I tiri contro morte si azzerano.'), 'error', 3500);
+        setTimeout(() => { box.classList.remove('ds-dead'); ko.dots.forEach((d) => d.replaceChildren()); reset(); }, 2000);
+      }
     };
     const line = (key, cls, text) => {
       const dots = [0, 1, 2].map((i) => h('button', { type: 'button', class: `dot ds-${cls}`, 'aria-label': `${text}: ${i + 1}`, onclick: () => tap(key, i) }));
@@ -1314,30 +1449,18 @@ async function customizeSection(s, ctx) {
   ctx.set('_sezioni', Object.keys(all).length ? all : undefined);
 }
 
-// Schermata della morte (3 fallimenti nei tiri contro morte).
-function deathScreen(reset) {
-  document.querySelector('.death')?.remove();
+// Teschietto (tre fallimenti nei tiri contro morte): prende il posto del pallino.
+function skullIcon() {
   const ns = 'http://www.w3.org/2000/svg';
   const el = (tag, attrs) => { const n = document.createElementNS(ns, tag); Object.entries(attrs).forEach(([k, v]) => n.setAttribute(k, v)); return n; };
-  const skull = el('svg', { viewBox: '0 0 64 64', class: 'death-skull', 'aria-hidden': 'true' });
+  const skull = el('svg', { viewBox: '0 0 64 64', class: 'ds-skull', 'aria-hidden': 'true' });
   skull.append(
-    el('path', { d: 'M32 5C17.6 5 7 15.4 7 29c0 8.2 4.1 13.6 9 16.6V52a5 5 0 005 5h22a5 5 0 005-5v-6.4c4.9-3 9-8.4 9-16.6C57 15.4 46.4 5 32 5z', fill: 'currentColor' }),
-    el('circle', { cx: '22', cy: '30', r: '6.5', class: 'death-hole' }),
-    el('circle', { cx: '42', cy: '30', r: '6.5', class: 'death-hole' }),
-    el('path', { d: 'M32 37l-4.5 8h9z', class: 'death-hole' }),
-    el('path', { d: 'M25 50v6M32 50v6M39 50v6', class: 'death-teeth' }));
-  const close = () => { overlay.classList.add('out'); setTimeout(() => overlay.remove(), 300); };
-  const overlay = h('div', { class: 'death', role: 'alertdialog', 'aria-label': tr('Morto') },
-    h('div', { class: 'death-inner' }, skull,
-      h('h2', {}, tr('Morto')),
-      h('p', {}, tr('Tre fallimenti nei tiri contro morte.')),
-      h('div', { class: 'death-actions' },
-        h('button', { type: 'button', class: 'btn', onclick: () => { reset(); close(); } }, tr('Azzera i tiri')),
-        h('button', { type: 'button', class: 'btn ghost', onclick: close }, tr('Chiudi')))));
-  overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
-  document.addEventListener('keydown', function esc(e) { if (e.key === 'Escape') { close(); document.removeEventListener('keydown', esc); } });
-  document.body.append(overlay);
-  overlay.querySelector('.btn')?.focus();
+    el('path', { d: 'M32 5C17.6 5 7 15.4 7 29c0 8.2 4.1 13.6 9 16.6V52a5 5 0 005 5h22a5 5 0 005-5v-6.4c4.9-3 9-8.4 9-16.6C57 15.4 46.4 5 32 5z', class: 'ds-skull-head' }),
+    el('circle', { cx: '22', cy: '30', r: '7', class: 'ds-skull-hole' }),
+    el('circle', { cx: '42', cy: '30', r: '7', class: 'ds-skull-hole' }),
+    el('path', { d: 'M32 38l-4.5 8h9z', class: 'ds-skull-hole' }),
+    el('path', { d: 'M25 50v6M32 50v6M39 50v6', class: 'ds-skull-teeth' }));
+  return skull;
 }
 
 // Pulsante "Aggiungi immagine" per una textarea di testo formattato: sceglie un

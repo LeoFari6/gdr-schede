@@ -47,6 +47,11 @@ export const icon = (name) => {
     book: 'M5 4h11a3 3 0 013 3v13H8a3 3 0 01-3-3zM5 17a3 3 0 013-3h11',
     crop: 'M6 2v14a2 2 0 002 2h14M2 6h14a2 2 0 012 2v14',
     image: 'M4 5h16v14H4zM4 16l5-5 4 4 2-2 5 5M15 9h.01',
+    pin: 'M9 3h6l-1 6 4 3v2H6v-2l4-3zM12 14v7',
+    play: 'M8 5.5v13l10.5-6.5z',
+    pause: 'M9 5v14M15 5v14',
+    cut: 'M6 9a3 3 0 100-6 3 3 0 000 6zM6 21a3 3 0 100-6 3 3 0 000 6zM20 4L8.1 15.9M14.5 14.5L20 20M8.1 8.1L12 12',
+    music: 'M9 18V5l11-2v13M9 18a3 3 0 11-6 0 3 3 0 016 0zM20 16a3 3 0 11-6 0 3 3 0 016 0z',
     alert: 'M12 9v4M12 17h.01M10.3 3.9L2 18a2 2 0 001.7 3h16.6a2 2 0 001.7-3L13.7 3.9a2 2 0 00-3.4 0z',
   };
   const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');

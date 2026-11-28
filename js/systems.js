@@ -368,6 +368,10 @@ export const DND5E = {
       fields: [{ key: 'schede_note', label: '', type: 'features', variant: 'notebook', legacyKey: 'note', placeholder: 'Nessuna scheda. Creane una per ogni argomento: PNG, luoghi, indizi, tabelle…', textPlaceholder: 'Nomi, indizi, cose da ricordare… Tocca per scrivere.' }],
     },
     {
+      id: 'audio', title: 'Audio', tab: 'Note', columns: 1,
+      fields: [{ key: 'audio', label: '', type: 'audio', placeholder: 'Nessun audio. Carica musiche, effetti o registrazioni (massimo 10 MB ciascuno).' }],
+    },
+    {
       id: 'diario', title: 'Diario delle sessioni', tab: 'Note', columns: 1,
       fields: [{ key: 'diario', label: '', type: 'features', variant: 'journal', placeholder: 'Nessuna sessione annotata. Le nuove voci compaiono in cima.' }],
     },
@@ -594,6 +598,10 @@ export const CYBERPUNK_RED = {
     {
       id: 'appunti', title: 'Appunti', tab: 'Note', columns: 1,
       fields: [{ key: 'schede_note', label: '', type: 'features', variant: 'notebook', placeholder: 'Nessuna scheda. Creane una per ogni argomento: PNG, luoghi, indizi, tabelle…', textPlaceholder: 'Nomi, indizi, cose da ricordare… Tocca per scrivere.' }],
+    },
+    {
+      id: 'audio', title: 'Audio', tab: 'Note', columns: 1,
+      fields: [{ key: 'audio', label: '', type: 'audio', placeholder: 'Nessun audio. Carica musiche, effetti o registrazioni (massimo 10 MB ciascuno).' }],
     },
     {
       id: 'diario', title: 'Diario delle sessioni', tab: 'Note', columns: 1,
