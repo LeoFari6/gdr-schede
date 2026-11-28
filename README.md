@@ -68,16 +68,11 @@ offline e si installa sul telefono come un'app.
   attuale, punti fortuna, armatura (SP di testa e corpo che si consuma), armi con il tiro calcolato,
   ferite critiche, cyberware con la perdita di umanità, equipaggiamento, netrunning (per i Netrunner),
   lifepath, appunti e diario.
-
 - **Valori a mano.** Ogni valore calcolato (iniziativa, competenza, modificatori, abilità, CD…)
   si tocca e si può scrivere a mano; "Automatico" torna al calcolo. I valori a mano sono
   sottolineati con il colore della scheda.
 - **Monete personalizzabili.** Con ⚙ nella sezione Monete si rinominano i tagli e si tengono
   solo quelli che servono (fino a 5).
-- **Ritratto ritagliabile.** Scegliendo l'immagine del personaggio si apre il ritaglio: zoom (cursore,
-  rotellina o due dita) e trascinamento. "Ritaglia" permette di rifarlo dall'immagine originale.
-- **Emoji negli oggetti.** A sinistra del nome di ogni oggetto dell'inventario si può mettere
-  un'emoji (dall'elenco o scritta a mano).
 - **Note a comparsa.** Oggetti dell'inventario, incantesimi e privilegi hanno un pulsante
   📄: la nota si apre in una finestra a comparsa. Il pulsante si colora quando la nota c'è.
 - **Home ordinata.** Si vedono al massimo 5 personaggi (gli altri con "Mostra tutti"); dal menu ⋯ di
@@ -140,12 +135,6 @@ js/views/               home, scheda personaggio, elenco incantesimi
 sw.js, manifest.webmanifest   uso offline e installazione
 tests/                  test con node:test
 ```
-
-## Idee per il futuro
-
-- Sincronizzazione tra dispositivi
-- Condivisione di un personaggio tramite link
-- Note di sessione e diario del personaggio
 
 ## Note legali
 
